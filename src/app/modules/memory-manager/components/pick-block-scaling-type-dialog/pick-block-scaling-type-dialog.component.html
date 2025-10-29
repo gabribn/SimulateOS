@@ -1,0 +1,39 @@
+<form [formGroup]="formGroup" (ngSubmit)="onSubmit($event)">
+	<header>
+		<h1 mat-dialog-title style="text-align: center">Tipos de Alocação</h1>
+	</header>
+
+	<section mat-dialog-content>
+		<div class="row" style="margin-bottom: 1em">
+			<div class="col">
+				<span
+					>Lembrando que, ao escolher/alterar o tipo de alocação, todos os
+					processos atualmente criados serão <b>apagados</b>!</span
+				>
+			</div>
+		</div>
+
+		<div class="row">
+			<mat-form-field appearance="outline" class="col">
+				<mat-label>Tipo de Alocação</mat-label>
+
+				<mat-select formControlName="scalingType">
+					<mat-option
+						*ngFor="let scalingType of scalingTypes"
+						[value]="scalingType"
+					>
+						{{ scalingType.id | blockScalingTypeDescription }}
+					</mat-option>
+				</mat-select>
+			</mat-form-field>
+		</div>
+	</section>
+
+	<footer mat-dialog-actions align="end">
+		<button mat-raised-button type="button" (click)="onClose()">
+			Cancelar
+		</button>
+
+		<button mat-raised-button color="primary" type="submit">Ok</button>
+	</footer>
+</form>

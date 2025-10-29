@@ -1,0 +1,146 @@
+<main id="dialog-container">
+	<header>
+		<h1 mat-dialog-title style="text-align: center">
+			Tempo de Vida dos Processos
+		</h1>
+
+		<div class="title-buttons-container">
+			<button mat-icon-button (click)="handleFullscreenDialog()">
+				<mat-icon>{{
+					isFullscreen ? "close_fullscreen" : "open_in_full"
+				}}</mat-icon>
+			</button>
+
+			<button mat-icon-button mat-dialog-close>
+				<mat-icon>close</mat-icon>
+			</button>
+		</div>
+	</header>
+
+	<section mat-dialog-content [ngClass]="{ 'mh-none': isFullscreen }">
+		<div class="row">
+			<div class="col" style="text-align: center">
+				<span
+					>Selecione os processos finalizados que deseja analisar o tempo de
+					vida</span
+				>
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="col">
+				<table
+					mat-table
+					[dataSource]="finishedProcesses"
+					class="process-manager__table"
+				>
+					<ng-container matColumnDef="check">
+						<th mat-header-cell *matHeaderCellDef>
+							<mat-checkbox
+								class="mx-3"
+								color="primary"
+								(click)="$event.stopPropagation()"
+								(change)="onCheckAll($event)"
+								[checked]="isAllProcessesChecked"
+							></mat-checkbox>
+						</th>
+
+						<td mat-cell *matCellDef="let process; let i = index">
+							<mat-checkbox
+								class="mx-3"
+								color="primary"
+								(click)="$event.stopPropagation()"
+								(change)="onCheck($event, i)"
+								[checked]="process.checked"
+							></mat-checkbox>
+						</td>
+					</ng-container>
+
+					<ng-container matColumnDef="id">
+						<th mat-header-cell *matHeaderCellDef>PID</th>
+						<td mat-cell *matCellDef="let process">
+							<div class="process-manager__flex-cell">
+								<div
+									class="process-manager__color"
+									[ngStyle]="{
+										'background-color': process.color
+									}"
+								></div>
+								<div>
+									<div class="process-manager__process-id">
+										{{ process.id }}
+									</div>
+									<div class="process-manager__process-type">
+										{{ getTypeName(process.type) }}
+									</div>
+								</div>
+							</div>
+						</td>
+					</ng-container>
+
+					<ng-container matColumnDef="priority">
+						<th style="text-align: center" mat-header-cell *matHeaderCellDef>
+							Prioridade
+						</th>
+						<td style="text-align: center" mat-cell *matCellDef="let process">
+							{{ process.priority }}
+						</td>
+					</ng-container>
+
+					<ng-container matColumnDef="cpuTime">
+						<th style="text-align: center" mat-header-cell *matHeaderCellDef>
+							Tempo de CPU
+						</th>
+						<td style="text-align: center" mat-cell *matCellDef="let process">
+							{{ process.cpuTime }}
+						</td>
+					</ng-container>
+
+					<ng-container matColumnDef="processTimeToFinish">
+						<th style="text-align: center" mat-header-cell *matHeaderCellDef>
+							Tempo do processo
+						</th>
+						<td style="text-align: center" mat-cell *matCellDef="let process">
+							{{ process.processTimeToFinish }}
+						</td>
+					</ng-container>
+
+					<tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+					<tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+				</table>
+			</div>
+		</div>
+
+		<div class="row">
+			<div
+				class="col"
+				style="
+					display: flex;
+					justify-content: flex-end;
+					margin-top: 1em;
+					margin-bottom: 1em;
+				"
+			>
+				<button
+					[disabled]="!checkedProcessesLength"
+					mat-raised-button
+					color="primary"
+					(click)="generateChart()"
+				>
+					Gerar gráfico
+				</button>
+			</div>
+		</div>
+
+		<div *ngIf="chartOptions" class="row">
+			<div class="col" style="overflow: hidden">
+				<apx-chart
+					[series]="chartOptions.series"
+					[chart]="chartOptions.chart"
+					[dataLabels]="chartOptions.dataLabels"
+					[plotOptions]="chartOptions.plotOptions"
+				></apx-chart>
+			</div>
+		</div>
+	</section>
+</main>

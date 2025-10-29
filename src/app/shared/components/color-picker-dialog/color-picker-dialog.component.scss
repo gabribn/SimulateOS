@@ -1,0 +1,16 @@
+.color-pick {
+  &__wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-bottom: 16px;
+  }
+
+  &__button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #bdbdbd;
+    appearance: none;
+  }
+}

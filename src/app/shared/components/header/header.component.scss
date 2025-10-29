@@ -1,0 +1,7 @@
+@import "~@angular/material/theming";
+
+header {
+	background-color: map_get($mat-blue, 50);
+	padding: 24px;
+	color: map_get($mat-blue, "contrast", 50);
+}

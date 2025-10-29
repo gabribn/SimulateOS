@@ -1,0 +1,11 @@
+<h1 mat-dialog-title>Cores</h1>
+<div mat-dialog-content>
+    <div class="color-pick__wrapper">
+        <button
+            class="color-pick__button"
+            *ngFor="let processColor of getAvailableColors()"
+            [ngStyle]="{ 'background-color': processColor.color }"
+            (click)="pickColor(processColor.color)"
+        ></button>
+    </div>
+</div>

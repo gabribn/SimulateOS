@@ -1,0 +1,187 @@
+<app-processes-stats></app-processes-stats>
+
+<div class="process-manager">
+	<div class="process-manager__parent">
+			<div class="process-manager__title">
+					<h1>Gerência de Processos</h1>
+					<button
+							[disabled]="!canCreateProcess()"
+							mat-raised-button
+							color="primary"
+							(click)="createProcess()"
+					>
+							Criar processo
+					</button>
+			</div>
+
+			<div class="main-tables">
+					<div class="main-table">
+							<div class="executing-process">
+									<mat-icon [ngStyle]="{ color: (executingProcess$ | async)?.color }">memory</mat-icon>
+									<div>Execução</div>
+									<div class="process-color-id">
+											<div *ngIf="executingProcess$ | async as executingProcess" class="process-color" [ngStyle]="{ 'background-color': executingProcess.color }"></div>
+											<div>
+													<div class="process-manager__process-id">
+															{{ (executingProcess$ | async)?.id || "-" }}
+													</div>
+											</div>
+									</div>
+							</div>
+
+							<div class="process-manager__table" [ngStyle]="((readyProcesses$ | async)?.length || 0) > 0 ? { height: '400px' } : null">
+									<table mat-table [dataSource]="(readyProcesses$ | async) ?? []">
+											<ng-container matColumnDef="id">
+													<th mat-header-cell *matHeaderCellDef>PID</th>
+													<td mat-cell *matCellDef="let process">
+															<div class="process-manager__flex-cell">
+																	<div class="process-manager__color" [ngStyle]="{ 'background-color': process.color }"></div>
+																	<div>
+																			<div class="process-manager__process-id">
+																					{{ process.id }}
+																			</div>
+																			<div class="process-manager__process-type">
+																					{{ getTypeName(process.type) }}
+																			</div>
+																	</div>
+															</div>
+													</td>
+											</ng-container>
+
+											<ng-container matColumnDef="priority">
+													<th style="text-align: center" mat-header-cell *matHeaderCellDef>Prioridade</th>
+													<td [ngStyle]="{ 'background-color': 'rgba(0,0,0,' + (process.priority * 0.03 + 0.03) + ')' }" style="text-align: center" mat-cell *matCellDef="let process">
+															{{ process.priority }}
+													</td>
+											</ng-container>
+
+											<ng-container matColumnDef="cpuTime">
+													<th style="text-align: center" mat-header-cell *matHeaderCellDef>Tempo de CPU</th>
+													<td style="text-align: center" mat-cell *matCellDef="let process">
+															{{ process.cpuTime }}
+													</td>
+											</ng-container>
+
+											<ng-container matColumnDef="processTimeToFinish">
+													<th style="text-align: center" mat-header-cell *matHeaderCellDef>Tempo do processo</th>
+													<td style="text-align: center" mat-cell *matCellDef="let process">
+															{{ process.processTimeToFinish }}
+													</td>
+											</ng-container>
+
+											<tr mat-header-row *matHeaderRowDef="displayedColumns$ | async"></tr>
+											<tr class="process-row" (click)="editProcess(row)" mat-row *matRowDef="let row; columns: displayedColumns$ | async"></tr>
+									</table>
+							</div>
+					</div>
+
+					<div class="main-table-division">&nbsp;</div>
+
+					<div class="main-table">
+							<div class="executing-process">
+									<mat-icon [ngStyle]="{ color: (ioProcess$ | async)?.color }">keyboard</mat-icon>
+									<div>I/O</div>
+									<div class="process-color-id">
+											<div *ngIf="ioProcess$ | async as ioProcess" class="process-color" [ngStyle]="{ 'background-color': ioProcess.color }"></div>
+											<div>
+													<div class="process-manager__process-id">
+															{{ (ioProcess$ | async)?.id || "-" }}
+													</div>
+											</div>
+									</div>
+							</div>
+
+							<div class="process-manager__table" [ngStyle]="((iOProcesses$ | async)?.length || 0) > 0 ? { height: '400px' } : null">
+									<table mat-table [dataSource]="(iOProcesses$ | async) ?? []">
+											<ng-container matColumnDef="id">
+													<th mat-header-cell *matHeaderCellDef>PID</th>
+													<td mat-cell *matCellDef="let process">
+															<div class="process-manager__flex-cell">
+																	<div class="process-manager__color" [ngStyle]="{ 'background-color': process.color }"></div>
+																	<div>
+																			<div class="process-manager__process-id">
+																					{{ process.id }}
+																			</div>
+																			<div class="process-manager__process-type">
+																					{{ getTypeName(process.type) }}
+																			</div>
+																	</div>
+															</div>
+													</td>
+											</ng-container>
+
+											<ng-container matColumnDef="cpuTime">
+													<th style="text-align: center" mat-header-cell *matHeaderCellDef>Tempo de CPU</th>
+													<td style="text-align: center" mat-cell *matCellDef="let process">
+															{{ process.cpuTime }}
+													</td>
+											</ng-container>
+
+											<ng-container matColumnDef="processTimeToFinish">
+													<th style="text-align: center" mat-header-cell *matHeaderCellDef>Tempo do processo</th>
+													<td style="text-align: center" mat-cell *matCellDef="let process">
+															{{ process.processTimeToFinish }}
+													</td>
+											</ng-container>
+
+											<tr mat-header-row *matHeaderRowDef="ioColumns"></tr>
+											<tr class="process-row" (click)="editProcess(row)" mat-row *matRowDef="let row; columns: ioColumns"></tr>
+									</table>
+							</div>
+					</div>
+			</div>
+
+			<div *ngIf="(getFinishedCPUBoundProcesses$ | async)?.length !== 0" class="process-lifetime-dialog-button-block">
+					<div>
+							<button mat-raised-button color="primary" (click)="handleOpenProcessLifetimeDialog()">
+									Gerar gráfico de tempo de vida
+							</button>
+					</div>
+			</div>
+
+			<div class="process-manager__table">
+					<table mat-table [dataSource]="(suspendedFinishedProcesses$ | async) ?? []">
+							<ng-container matColumnDef="id">
+									<th mat-header-cell *matHeaderCellDef>PID</th>
+									<td mat-cell *matCellDef="let process">
+											<div class="process-manager__flex-cell">
+													<div class="process-manager__color" [ngStyle]="{ 'background-color': process.color }"></div>
+													<div>
+															<div class="process-manager__process-id">
+																	{{ process.id }}
+															</div>
+															<div class="process-manager__process-type">
+																	{{ getTypeName(process.type) }}
+															</div>
+													</div>
+											</div>
+									</td>
+							</ng-container>
+
+							<ng-container matColumnDef="priority">
+									<th style="text-align: center" mat-header-cell *matHeaderCellDef>Prioridade</th>
+									<td [ngStyle]="{ 'background-color': isProcessSuspended(process) ? 'rgba(0,0,0,' + (process.priority * 0.03 + 0.03) + ')' : null }" style="text-align: center" mat-cell *matCellDef="let process">
+											{{ process.priority }}
+									</td>
+							</ng-container>
+
+							<ng-container matColumnDef="cpuTime">
+									<th style="text-align: center" mat-header-cell *matHeaderCellDef>Tempo de CPU</th>
+									<td style="text-align: center" mat-cell *matCellDef="let process">
+											{{ process.cpuTime }}
+									</td>
+							</ng-container>
+
+							<ng-container matColumnDef="processTimeToFinish">
+									<th style="text-align: center" mat-header-cell *matHeaderCellDef>Tempo do processo</th>
+									<td style="text-align: center" mat-cell *matCellDef="let process">
+											{{ process.processTimeToFinish }}
+									</td>
+							</ng-container>
+
+							<tr mat-header-row *matHeaderRowDef="displayedColumns$ | async"></tr>
+							<tr [ngClass]="{ 'process-row': isProcessSuspended(row), 'finished-row': !isProcessSuspended(row) }" (click)="editProcess(row)" mat-row *matRowDef="let row; columns: displayedColumns$ | async"></tr>
+					</table>
+			</div>
+	</div>
+</div>

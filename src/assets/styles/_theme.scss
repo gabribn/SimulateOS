@@ -1,0 +1,10 @@
+@import '~@angular/material/theming';
+
+$app-theme: (
+  primary: mat-palette($mat-blue),
+  accent: mat-palette($mat-light-green),
+  warn: mat-palette($mat-pink),
+  is-dark: false,
+  foreground: $mat-light-theme-foreground,
+  background: $mat-light-theme-background
+);

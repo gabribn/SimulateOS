@@ -1,0 +1,88 @@
+<app-header>
+	<div class="processes-stats">
+		<div class="processes-stats__data">
+			<div>
+				<div class="processes-stats__title">Tempo</div>
+				<div class="processes-stats__content">{{ timer$ | async }}</div>
+			</div>
+
+			<div>
+				<div class="processes-stats__title">Processos</div>
+				<div class="processes-stats__content">
+					{{ (availableProcesses$ | async)?.length! }}
+				</div>
+			</div>
+
+			<div>
+				<div class="processes-stats__title">Escalonamento</div>
+				<div style="display: flex; align-items: center">
+					<div class="processes-stats__content">
+						{{ scalingType$ | async | scalingTypeDescription }}
+					</div>
+
+					<button
+						mat-icon-button
+						type="button"
+						(click)="handleOpenSelectScalingType()"
+					>
+						<mat-icon>edit</mat-icon>
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<form class="cpu-settings" [formGroup]="formGroup">
+			<mat-form-field appearance="outline" style="text-align: center">
+				<mat-label>Tempo de espera de I/O</mat-label>
+
+				<button
+					matPrefix
+					mat-icon-button
+					type="button"
+					(click)="handleQuantity('decrement', 'ioWaitTime')"
+				>
+					<mat-icon class="remove-icon">do_not_disturb_on</mat-icon>
+				</button>
+
+				<input matInput readonly formControlName="ioWaitTime" />
+
+				<button
+					matSuffix
+					mat-icon-button
+					type="button"
+					(click)="handleQuantity('increment', 'ioWaitTime')"
+				>
+					<mat-icon class="add-icon">add_circle</mat-icon>
+				</button>
+			</mat-form-field>
+
+			<mat-form-field appearance="outline" style="text-align: center">
+				<mat-label>Fatia de tempo</mat-label>
+
+				<button
+					matPrefix
+					mat-icon-button
+					type="button"
+					(click)="handleQuantity('decrement', 'timeSlice')"
+				>
+					<mat-icon class="remove-icon">do_not_disturb_on</mat-icon>
+				</button>
+
+				<input matInput readonly formControlName="timeSlice" />
+
+				<button
+					matSuffix
+					mat-icon-button
+					type="button"
+					(click)="handleQuantity('increment', 'timeSlice')"
+				>
+					<mat-icon class="add-icon">add_circle</mat-icon>
+				</button>
+			</mat-form-field>
+		</form>
+
+		<button mat-raised-button color="primary" (click)="stopProcesses()">
+			Parar
+		</button>
+	</div>
+</app-header>

@@ -1,0 +1,27 @@
+<form
+  class="update-process-dialog"
+  [formGroup]="processForm"
+  (ngSubmit)="onSubmit()"
+>
+  <h1 mat-dialog-title>Nova prioridade</h1>
+  <div mat-dialog-content>
+    <div class="row">
+      <mat-form-field appearance="outline" class="col">
+        <mat-label>Prioridade</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="priority"
+          min="0"
+          max="15"
+        />
+      </mat-form-field>
+    </div>
+  </div>
+  <div mat-dialog-actions align="end">
+    <button mat-raised-button type="button" (click)="onClose()">
+      Cancelar
+    </button>
+    <button mat-raised-button color="primary" type="submit">Ok</button>
+  </div>
+</form>

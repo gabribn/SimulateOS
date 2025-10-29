@@ -1,0 +1,118 @@
+<form
+  class="create-process-dialog"
+  [formGroup]="processForm"
+  (ngSubmit)="onSubmit()"
+>
+  <div style="display: flex; justify-content: space-between">
+    <h1 mat-dialog-title>Criação de processo</h1>
+
+    <h3 style="text-decoration: underline">
+      Máx Processos Permitido: <b>{{ maxAvailableProcesses }}</b>
+    </h3>
+  </div>
+
+  <div mat-dialog-content>
+    <div class="row">
+      <mat-form-field appearance="outline" class="col">
+        <mat-label>Cor do processo</mat-label>
+        <input
+          matInput
+          type="text"
+          formControlName="color"
+          (click)="pickColor()"
+          [readonly]="true"
+        />
+        <div
+          matSuffix
+          class="create-process-dialog__color-preview"
+          [ngStyle]="{
+            'background-color': processForm.get('color')?.value
+          }"
+        ></div>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="col">
+        <mat-label>Tipo de processo</mat-label>
+        <mat-select formControlName="type">
+          <mat-option *ngFor="let type of typeOptions" [value]="type.value">
+            {{ type.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <div class="row">
+      <mat-form-field
+        *ngIf="isScalingTypeCircularWithPriorities"
+        appearance="outline"
+        class="col"
+      >
+        <mat-label>Prioridade</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="priority"
+          min="0"
+          max="15"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="col">
+        <mat-label>Quantidade de processos</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="number"
+          min="1"
+          [max]="this.maxAvailableProcesses"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="col">
+        <mat-label>Unidade de tempo</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="processTimeToFinish"
+          min="1"
+        />
+      </mat-form-field>
+
+      <!-- Alteração dinâmica para exibir 'Quantidade de blocos' ou 'Quantidade de páginas' -->
+      <mat-form-field *ngIf="!isPagingMode" appearance="outline" class="col">
+        <mat-label>Quantidade de blocos de memória</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="memoryBlocksRequired"
+          min="1"
+          [max]="maxAvailableBlocks"
+        />
+      </mat-form-field>
+
+      <mat-form-field *ngIf="isPagingMode" appearance="outline" class="col">
+        <mat-label>Quantidade de páginas</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="pagesRequired"
+          min="1"
+          [max]="maxAvailablePages"
+        />
+      </mat-form-field>
+    </div>
+
+    <h3 style="text-decoration: underline; color: black;">
+      <!-- Exibe a etiqueta correta para páginas ou blocos -->
+      {{ isPagingMode ? 'Máximo de páginas permitido' : 'Máximo de blocos permitido' }}:
+      <b>{{ isPagingMode ? maxAvailablePages : maxAvailableBlocks }}</b>
+    </h3>
+  </div>
+
+  <div mat-dialog-actions style="display: flex; justify-content: end;">
+    <button mat-raised-button type="button" (click)="onClose()" style="margin-right: 20px;">
+      Cancelar
+    </button>
+    <button mat-raised-button color="primary" type="submit">Ok</button>
+  </div>
+</form>
