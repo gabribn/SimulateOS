@@ -402,17 +402,17 @@ export class ProcessesState {
 	}
 
 
-	@Action(Processes.IncrementTimer)
-	incrementTimer(context: StateContext<ProcessesStateModel>) {
-		const state = context.getState();
+@Action(Processes.IncrementTimer)
+incrementTimer(context: StateContext<ProcessesStateModel>) {
+    const highResolutionTime = performance.now(); 
 
-		context.patchState({
-			timer: state.timer + 1,
-		});
+    context.patchState({
+        timer: highResolutionTime, 
+    });
 
-		this.runCPU(context);
-		this.runIO(context);
-	}
+    this.runCPU(context);
+    this.runIO(context);
+}
 
 	private runCircularProcess(
 		currentExecutingProcess: Process,

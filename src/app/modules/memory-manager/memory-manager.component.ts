@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Select, Store } from '@ngxs/store';
 import { Observable, Subject } from 'rxjs';
-import { takeUntil, first } from 'rxjs/operators';
+import { takeUntil, map } from 'rxjs/operators';
 import { BlocksScalingTypesEnum } from 'src/app/shared/constants/blocks-types.contants';
 import { Box } from 'src/app/shared/models/box';
 import { BlocksState } from 'src/app/shared/stores/blocks/blocks.state';
@@ -23,6 +23,7 @@ import { Sequence } from 'src/app/shared/models/sequence';
 export class MemoryManagerComponent implements OnInit, OnDestroy {
 	@Select(BlocksState.getSequences) sequences$!: Observable<Sequence[]>;
 	@Select(BlocksState.getBlocks) blocks$!: Observable<Box[]>;
+	@Select(BlocksState.getSwapBlocks) swapBlocks$!: Observable<Box[]>; 
 	@Select(ProcessesState.getTimer) timer$!: Observable<number>;
 	@Select(BlocksState.getBlockScaling)
 	blockScaling$!: Observable<BlocksScalingTypesEnum>;
@@ -31,34 +32,40 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 	@Select(ProcessesState.getSuspendedProcesses)
 	suspendedProcesses$!: Observable<Process[]>;
 	availableProcesses: Process[] = [];
-  @Select(ProcessesState.getNotFinishedProcesses) notFinishedProcesses$!: Observable<Process[]>;
-  notFinishedProcesses: Process[] = [];
+	@Select(ProcessesState.getNotFinishedProcesses) notFinishedProcesses$!: Observable<Process[]>;
+	notFinishedProcesses: Process[] = [];
 	@Select(ProcessesState.getFinishedProcesses) finishedProcesses$!: Observable<
 		Process[]
 	>;
 	private _notifier$ = new Subject<void>();
 
+	timerInSeconds$!: Observable<number>;
+
 	constructor(
 		private readonly dialog: MatDialog,
 		private readonly store: Store
-	) {}
+	) {
+		this.timerInSeconds$ = this.timer$.pipe(
+            map(milliseconds => milliseconds / 1000)
+        );
+	}
 
 	ngOnInit(): void {
 		this.availableProcesses$
 			.pipe(takeUntil(this._notifier$))
 			.subscribe((processes) => (this.availableProcesses = [...processes]));
 
-			this.notFinishedProcesses$
-      .pipe(takeUntil(this._notifier$))
-      .subscribe((processes: Process[]) => {
-        // Filtra processos que ainda não estão "finished", mantendo a ordem original
-        const updatedProcesses = processes.filter(process => process.state !== 'finished');
-
-        // Atualiza a lista somente se houve alteração
-        if (this.notFinishedProcesses.length !== updatedProcesses.length) {
-          this.notFinishedProcesses = updatedProcesses;
-        }
-      });
+		this.notFinishedProcesses$
+			.pipe(takeUntil(this._notifier$))
+			.subscribe((processes: Process[]) => {
+        		// Filtra processos que ainda não estão "finished", mantendo a ordem original
+				const updatedProcesses = processes.filter(process => process.state !== 'finished');
+				
+        		// Atualiza a lista somente se houve alteração
+				if (this.notFinishedProcesses.length !== updatedProcesses.length) {
+					this.notFinishedProcesses = updatedProcesses;
+				}
+			});
 	}
 
 	openBlockScalingTypeDialog(): void {

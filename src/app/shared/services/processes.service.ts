@@ -50,23 +50,32 @@ export class ProcessesService {
 		time: number
 	): Observable<Process[]> {
 		return from(Array.from(Array(process.number).keys())).pipe(
-			concatMap((index) =>
-				of({
-					id: this.generateId(),
+			concatMap((index) => {
+				const idString = this.generateId();          // id continua string
+				const idNumber = Number(idString);           // usado só no cálculo
+				const timeOffset = idNumber / 10000000;      // incremento
+
+				return of({
+					id: idString,                            // mantém string
 					priority: process.priority,
 					color: this.generateColor(process.color, index),
 					type: process.type,
 					state: ProcessStates.ready,
 					cpuTime: 0,
-					timeCreated: time,
+					timeCreated: time + timeOffset,          // soma funcionando
 					processTimeToFinish: process.processTimeToFinish,
 					executingTime: 0,
 					currentType: this.getProcessType(process.type),
 					memoryBlocksRequired: process.memoryBlocksRequired,
-					allocatedBlocks: process.allocatedBlocks ?? Array.from({ length: process.memoryBlocksRequired }, (_, i) => i + 1), // Gera blocos se não existirem
+					allocatedBlocks:
+						process.allocatedBlocks ??
+						Array.from(
+							{ length: process.memoryBlocksRequired },
+							(_, i) => i + 1
+						),
 					pages: process.pages,
-				}).pipe(delay(50))
-			),
+				}).pipe(delay(50));
+			}),
 			toArray()
 		);
 	}
