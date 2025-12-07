@@ -3,7 +3,7 @@
 		<div class="content-header-memory">
 			<div style="margin-right: 20px">
 				<div class="processes-stats__title">Tempo</div>
-				<div class="processes-stats__content">{{ timer$ | async }}</div>
+				<div class="processes-stats__content">{{ timerInSeconds$ | async | number:'1.0-0'}}</div>
 			</div>
 			<div>
 				<div class="processes-stats__title" style="margin-right: 20px">
@@ -96,27 +96,54 @@
 			</table>
 		</div>
 		<div
-		*ngIf="!isContiguousScalingType(blockScaling$ | async)"
-		class="process-memory__table-page"
-	>
-		<h2>Tabela de páginas</h2>
-		<div class="process-memory__wrapper-pages">
-			<div *ngFor="let process of notFinishedProcesses">
-				<div class="process-row">
-					<!-- Exibe o ID do processo e as páginas lado a lado -->
-					<div
-						*ngFor="let pageNumber of getPageNumbers(process)"
-						class="page-rectangle"
-						[ngStyle]="{ 'background-color': process.color }"
-						(click)="editProcess(process)"
-					>
-						Processo: <br />{{ process.id }} <br />
-						Página: {{ pageNumber }}
+			*ngIf="!isContiguousScalingType(blockScaling$ | async)"
+			class="process-memory__table-page"
+		>
+			<h2>Tabela de páginas</h2>
+			<div class="process-memory__wrapper-pages">
+				<div *ngFor="let process of notFinishedProcesses">
+					<div class="process-row">
+						<!-- Exibe o ID do processo e as páginas lado a lado -->
+						<div
+							*ngFor="let pageNumber of getPageNumbers(process)"
+							class="page-rectangle"
+							[ngStyle]="{ 'background-color': process.color }"
+							(click)="editProcess(process)"
+						>
+							Processo: <br />{{ process.id }} <br />
+							Página: {{ pageNumber }}
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>
 	</div>
 
+	<div
+		*ngIf="!isContiguousScalingType(blockScaling$ | async)"
+		class="memory-title"
+		style="margin-top: 20px;"
+	>
+		<h2>Memória Virtual / Swap</h2>
+	</div>
+	
+	<div 
+		*ngIf="!isContiguousScalingType(blockScaling$ | async)"
+		class="process-memory__wrapper-memory"
+	>
+		<div class="process-memory__containerBlocos reduced-width" style="border-color: #666; background-color: #f0f0f0;">
+			<div
+				*ngFor="let box of swapBlocks$ | async; let i = index"
+				class="process-memory__blocos"
+				[ngClass]="{ 'empty-box': box.process, 'colored-box': !box.process }"
+				[style.background-color]="box.process?.color || '#e0e0e0'"
+				[attr.id]="'swap_box_' + i"
+			>
+				<span class="block-index">Swap {{ i }}</span>
+				<span *ngIf="box.process" class="block-info">
+					{{ box.process.id }}
+				</span>
+			</div>
+		</div>
 	</div>
 </div>
