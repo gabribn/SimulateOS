@@ -56,7 +56,7 @@ export class CreateProcessDialogComponent implements OnInit {
   ];
 
   blocksPerPage = 5; // Cada página tem 5 blocos
-  maxAvailablePages = 12; // Máximo de páginas permitido
+  maxAvailablePages = 1; // Máximo de páginas permitido
   isPagingMode = false; // Flag para verificar se é escalonamento por páginas
   scalingType!: ScalingTypesEnum;
   blockScalingType!: BlocksScalingTypesEnum;
@@ -112,7 +112,7 @@ export class CreateProcessDialogComponent implements OnInit {
       if (this.isPagingMode) {
         this.maxAvailablePages = Math.min(
           Math.floor(freeBlocks / this.blocksPerPage),
-          12
+          this.maxAvailablePages
         );
         this.processForm.get('pagesRequired')?.setValidators([
           Validators.min(1),
