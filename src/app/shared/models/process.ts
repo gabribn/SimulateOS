@@ -16,6 +16,7 @@ export interface Process {
 	memoryBlocksRequired: number;
 	allocatedBlocks?: number[];
 	pages: {pageNumber: number}[];
+	lastAccessed?: number;
 }
 
 export interface CreateProcessDTO {

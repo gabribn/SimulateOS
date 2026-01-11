@@ -26,4 +26,9 @@ export namespace BlocksAction {
     static readonly type = '[Blocks] Reset State';
   }
 
+  export class BringToPhysicalMemory {
+        static readonly type = '[Blocks] Bring To Physical Memory';
+        constructor(public process: Process) {}
+    }
+
 }

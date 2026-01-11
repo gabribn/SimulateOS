@@ -110,9 +110,13 @@ export class ProcessesState {
 
 
 	@Selector()
-  static getNotFinishedProcesses(state: ProcessesStateModel): Process[] {
-    return state.data.filter(process => process.state != 'finished'); // ou qualquer status inicial
-  }
+	static getNotFinishedProcesses(state: ProcessesStateModel): Process[] {
+	return state.data
+		.filter(process => process.state !== 'finished')
+		.sort((a, b) => 
+		a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' })
+		);
+	}
 
 	@Selector()
 	static getFinishedCPUBoundProcesses(state: ProcessesStateModel) {
@@ -331,6 +335,7 @@ export class ProcessesState {
 		this.saveStateToLocalStorage(context.getState());
 	}
 
+	//
 	@Action(Processes.UpdateProcessState)
 	updateProcessState(
 		context: StateContext<ProcessesStateModel>,
@@ -338,8 +343,13 @@ export class ProcessesState {
 	) {
 		const { data, timer } = context.getState();
 		const index = data.findIndex((item) => item.id === action.process.id);
+		if (index === -1) return;
 
 		const updatedProcess: Process = { ...action.process, state: action.state };
+
+		if (action.state === ProcessStates.execution) {
+			context.dispatch(new BlocksAction.BringToPhysicalMemory(updatedProcess));
+		}
 
 		if (
 			updatedProcess.type === ProcessTypes.cpuAndIoBound &&
@@ -365,9 +375,7 @@ export class ProcessesState {
 			context.dispatch(new BlocksAction.ReleaseBlocks(action.process));
 		}
 
-		context.patchState({
-			data: [...data],
-		});
+		context.patchState({ data: [...data] });
 		this.saveStateToLocalStorage(context.getState());
 	}
 

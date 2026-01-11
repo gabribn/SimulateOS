@@ -14,11 +14,11 @@ export interface BlocksStateModel {
 }
 
 export const BLOCKS_STATE_INITIAL_STATE: BlocksStateModel = {
-	blocks: Array.from({ length: 50 }, (_, index) => ({
+	blocks: Array.from({ length: 20 }, (_, index) => ({
 		process: null,
 		index: index,
 	})),
-	swapBlocks: Array.from({ length: 50 }, (_, index) => ({
+	swapBlocks: Array.from({ length: 20 }, (_, index) => ({
 		process: null,
 		index: index,
 	})),
@@ -122,6 +122,45 @@ export class BlocksState {
 		}
 		this.runMemoryBlockScaling(context, action);
 		this.saveStateToLocalStorage(context.getState());
+	}
+
+	@Action(BlocksAction.BringToPhysicalMemory)
+	bringToPhysicalMemory(
+		context: StateContext<BlocksStateModel>,
+		action: BlocksAction.BringToPhysicalMemory
+	) {
+		const state = context.getState();
+		const blocks = state.blocks.map(b => ({ ...b }));
+		const swapBlocks = state.swapBlocks.map(b => ({ ...b }));
+		const process = action.process;
+
+		const isAlreadyInPhysicalMemory = blocks.some(b => b.process?.id === process.id);
+
+		if (isAlreadyInPhysicalMemory) {
+			console.log(`Processo ${process.id} já está na memória física.`);
+			return;
+		}
+
+		const indicesInSwap = swapBlocks
+			.map((box, index) => (box.process?.id === process.id ? index : -1))
+			.filter(idx => idx !== -1);
+
+		if (indicesInSwap.length > 0) {
+			indicesInSwap.forEach(swapIdx => {
+				const moved = this.moveToPhysical(
+					blocks, 
+					swapBlocks, 
+					swapIdx, 
+					state.blockScaling
+				);
+				
+				if (!moved) {
+					console.error("Falha ao mover: RAM e SWAP cheios.");
+				}
+			});
+
+			context.patchState({ blocks, swapBlocks });
+		}
 	}
 
 	runFirstFit(
@@ -322,6 +361,124 @@ export class BlocksState {
 		return true;
 	}
 
+	private moveBlocksToSwap(
+    blocks: Box[],
+    swapBlocks: Box[],
+    blockIndexToSwap: number
+	): boolean {
+		const victimProcess = blocks[blockIndexToSwap].process;
+		if (!victimProcess) return false;
+
+		const processId = victimProcess.id;
+
+		const physicalIndices = blocks
+			.map((b, i) => (b.process?.id === processId ? i : -1))
+			.filter(i => i !== -1);
+
+		const blocksToMoveCount = physicalIndices.length;
+
+		const freeSwapIndices = swapBlocks
+			.map((b, i) => (b.process === null ? i : -1))
+			.filter(i => i !== -1);
+
+		if (freeSwapIndices.length < blocksToMoveCount) {
+			return false;
+		}
+
+		const newSwapIndices: number[] = [];
+
+		physicalIndices.forEach((physIdx, iteration) => {
+			const targetSwapIdx = freeSwapIndices[iteration];
+			swapBlocks[targetSwapIdx].process = blocks[physIdx].process;
+			newSwapIndices.push(targetSwapIdx);
+			blocks[physIdx].process = null;
+		});
+
+		const movedProcess = swapBlocks[newSwapIndices[0]].process;
+		if (movedProcess) {
+			movedProcess.allocatedBlocks = newSwapIndices;
+		}
+
+		return true;
+	}
+
+	private moveToPhysical(
+		blocks: Box[],
+		swapBlocks: Box[],
+		swapIndexToMove: number,
+		algorithm: BlocksScalingTypesEnum 
+	): boolean {
+		let freePhysicalIndex = blocks.findIndex(b => b.process === null);
+
+		if (freePhysicalIndex === -1) {
+			const victimIndex = this.getVictimBlockIndex(blocks, algorithm);
+
+			if (victimIndex !== -1) {
+				const movedToSwap = this.moveBlocksToSwap(blocks, swapBlocks, victimIndex);
+				if (!movedToSwap) return false;
+				
+				freePhysicalIndex = victimIndex;
+			} else {
+				return false;
+			}
+		}
+
+		const targetProcess = swapBlocks[swapIndexToMove].process;
+		if (!targetProcess) return false;
+
+		blocks[freePhysicalIndex] = { ...blocks[freePhysicalIndex], process: targetProcess };
+
+		if (targetProcess.allocatedBlocks) {
+			targetProcess.allocatedBlocks = targetProcess.allocatedBlocks
+				.filter(idx => idx !== swapIndexToMove)
+				.concat(freePhysicalIndex);
+		}
+
+		swapBlocks[swapIndexToMove].process = null;
+
+		return true;
+	}
+
+	private getVictimBlockIndex(
+		blocks: Box[], 
+		algorithm: BlocksScalingTypesEnum
+	): number {
+		const occupiedIndices = blocks
+			.map((b, i) => b.process !== null ? i : -1)
+			.filter(i => i !== -1);
+
+		if (occupiedIndices.length === 0) return -1;
+
+		const processesInMemory = Array.from(
+			new Set(occupiedIndices.map(i => blocks[i].process!))
+		);
+
+		let victimProcess: Process;
+
+		switch (algorithm) {
+			case BlocksScalingTypesEnum.FIFO:
+				victimProcess = processesInMemory.sort((a, b) => a.timeCreated - b.timeCreated)[0];
+				break;
+
+			case BlocksScalingTypesEnum.LRU:
+				victimProcess = processesInMemory.sort((a, b) => 
+					(a.lastAccessed || 0) - (b.lastAccessed || 0)
+				)[0];
+				break;
+
+			case BlocksScalingTypesEnum.NRU:
+				const randomIndex = Math.floor(Math.random() * processesInMemory.length);
+				victimProcess = processesInMemory[randomIndex];
+				break;
+
+			default:
+				victimProcess = processesInMemory.sort((a, b) => a.timeCreated - b.timeCreated)[0];
+				break;
+		}
+
+		return blocks.findIndex(b => b.process?.id === victimProcess.id);
+	}
+
 	private runFIFO(
 		context: StateContext<BlocksStateModel>,
 		action: BlocksAction.AllocateBlocks
@@ -344,7 +501,7 @@ export class BlocksState {
 			const allProcesses = blocks
 				.filter(block => block.process !== null)
 				.map(block => block.process!)
-				.sort((a, b) => a.timeCreated - b.timeCreated); 
+				.sort((a, b) => a.timeCreated - b.timeCreated);
 
 			while (emptyBlocks.length < memoryBlocksRequired && allProcesses.length > 0) {
 				const oldestProcess = allProcesses.shift();
@@ -419,7 +576,7 @@ export class BlocksState {
 		if (emptyBlocks.length < memoryBlocksRequired) {
 			while (emptyBlocks.length < memoryBlocksRequired && lruList.length > 0) {
 				const leastRecentlyUsedIndex = lruList.shift();
-				
+
 				if (leastRecentlyUsedIndex !== undefined) {
 					const moved = this.moveToSwap(blocks, swapBlocks, leastRecentlyUsedIndex);
 					if (moved) {
@@ -428,7 +585,7 @@ export class BlocksState {
 							index: leastRecentlyUsedIndex,
 						});
 					} else {
-						break; 
+						break;
 					}
 				}
 			}
@@ -464,60 +621,60 @@ export class BlocksState {
 		const blocks = [...state.blocks];
 		const swapBlocks = [...state.swapBlocks];
 		const { process, memoryBlocksRequired } = action.payload || {};
+
 		if (!process || !memoryBlocksRequired) {
 			console.error('Processo ou quantidade de blocos necessários ausentes.');
 			return;
 		}
 
-		// Criar lista de blocos vazios
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
 			.filter(({ block }) => !block.process);
 
 		if (emptyBlocks.length < memoryBlocksRequired) {
-			// Candidatos a sair (ocupados)
-			let nruCandidates = blocks
-				.map((block, index) => ({ block, index }))
-				.filter(({ block }) => block.process !== null)
-				.map(({ index }) => index);
+			const processIdsInMemory = Array.from(new Set(
+				blocks
+					.filter(b => b.process !== null && b.process.id !== process.id)
+					.map(b => b.process!.id)
+			));
 
-			while (emptyBlocks.length < memoryBlocksRequired && nruCandidates.length > 0) {
-				// Escolhe aleatoriamente para o Swap (simulando classe NRU baixa)
-				const randomIndex = Math.floor(Math.random() * nruCandidates.length);
-				const nruIndex = nruCandidates.splice(randomIndex, 1)[0];
-				
-				if (nruIndex !== undefined) {
-					const moved = this.moveToSwap(blocks, swapBlocks, nruIndex);
+			while (emptyBlocks.length < memoryBlocksRequired && processIdsInMemory.length > 0) {
+
+				const randomIndex = Math.floor(Math.random() * processIdsInMemory.length);
+				const victimProcessId = processIdsInMemory.splice(randomIndex, 1)[0];
+
+				const victimBlocksIndices = blocks
+					.map((b, i) => (b.process?.id === victimProcessId ? i : -1))
+					.filter(i => i !== -1);
+
+				victimBlocksIndices.forEach(idx => {
+					const moved = this.moveToSwap(blocks, swapBlocks, idx);
 					if (moved) {
-						emptyBlocks.push({ block: blocks[nruIndex], index: nruIndex });
-					} else {
-						break;
+						emptyBlocks.push({ block: blocks[idx], index: idx });
 					}
-				}
+				});
 			}
 
 			if (emptyBlocks.length < memoryBlocksRequired) {
-				console.error('Memória Física e SWAP insuficientes.');
+				console.error('Memória Física e SWAP insuficientes mesmo após remoção por processo.');
 				return;
 			}
 		}
 
-		// Embaralhar a lista de blocos vazios para evitar alocação contígua
+		// 3. Alocação (mantendo sua lógica de espalhamento se desejar)
 		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
 
-		// Alocar blocos aleatoriamente entre os disponíveis
 		let allocatedBlocks: number[] = [];
 		for (let i = 0; i < memoryBlocksRequired; i++) {
 			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { process, index: blockIndex }; // Aloca o bloco para o processo
-			allocatedBlocks.push(blockIndex); // Registra o índice do bloco alocado
+			blocks[blockIndex] = { ...blocks[blockIndex], process: process };
+			allocatedBlocks.push(blockIndex);
 		}
 
-		// Atualiza os blocos alocados no processo
 		process.allocatedBlocks = allocatedBlocks;
 
 		context.patchState({ blocks, swapBlocks });
-		console.log(`Blocos alocados via NRU com SWAP: ${allocatedBlocks}`);
+		console.log(`Processo ${process.id} alocado. Blocos: ${allocatedBlocks}`);
 	}
 
 
@@ -582,10 +739,10 @@ export class BlocksState {
 
 	@Action(BlocksAction.ResetState)
 	resetState(context: StateContext<BlocksStateModel>) {
-		context.patchState({ 
+		context.patchState({
 			blocks: BLOCKS_STATE_INITIAL_STATE.blocks,
 			swapBlocks: BLOCKS_STATE_INITIAL_STATE.swapBlocks
-		 });
+		});
 		this.saveStateToLocalStorage(context.getState());
 	}
 
