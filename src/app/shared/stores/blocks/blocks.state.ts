@@ -11,6 +11,7 @@ export interface BlocksStateModel {
 	blocks: Box[];
 	swapBlocks: Box[];
 	blockScaling: BlocksScalingTypesEnum;
+	allocationOrderIds: string[];
 }
 
 export const BLOCKS_STATE_INITIAL_STATE: BlocksStateModel = {
@@ -23,6 +24,7 @@ export const BLOCKS_STATE_INITIAL_STATE: BlocksStateModel = {
 		index: index,
 	})),
 	blockScaling: BlocksScalingTypesEnum.FirstFit,
+	allocationOrderIds: [],
 };
 
 @State<BlocksStateModel>({
@@ -113,6 +115,7 @@ export class BlocksState {
 		const blocks = [...state.blocks];
 		const swapBlocks = [...state.swapBlocks]
 		const { memoryBlocksRequired } = action.payload;
+		const currentIds = state.allocationOrderIds || [];
 
 		const emptyBlocksLength = blocks.filter((block) => !block.process).length + swapBlocks.filter((block) => !block.process).length;
 
@@ -120,6 +123,11 @@ export class BlocksState {
 			console.log("Memória insuficiente")
 			return;
 		}
+
+		context.patchState({
+        	allocationOrderIds: [...currentIds, action.payload.process.id]
+    	});
+
 		this.runMemoryBlockScaling(context, action);
 		this.saveStateToLocalStorage(context.getState());
 	}
