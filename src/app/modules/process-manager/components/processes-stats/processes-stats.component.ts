@@ -4,6 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSliderChange } from '@angular/material/slider';
 import { Select, Store } from '@ngxs/store';
 import { Observable, Subscription } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import { ScalingTypesEnum } from 'src/app/shared/constants/scaling-types.constants';
 import { Process } from 'src/app/shared/models/process';
@@ -27,6 +28,8 @@ export class ProcessesStatsComponent implements OnInit, OnDestroy {
 	scalingType$!: Observable<ScalingTypesEnum>;
 	formGroup!: FormGroup;
 
+	timerInSeconds$!: Observable<number>;
+
 	constructor(
 		private readonly formBuilder: FormBuilder,
 		private readonly store: Store,
@@ -36,6 +39,9 @@ export class ProcessesStatsComponent implements OnInit, OnDestroy {
 			ioWaitTime: [null],
 			timeSlice: [null],
 		});
+		this.timerInSeconds$ = this.timer$.pipe(
+						map(milliseconds => milliseconds / 1000)
+					);
 	}
 
 	private initFormsObservable(): void {

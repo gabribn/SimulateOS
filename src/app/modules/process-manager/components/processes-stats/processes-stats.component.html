@@ -3,7 +3,7 @@
 		<div class="processes-stats__data">
 			<div>
 				<div class="processes-stats__title">Tempo</div>
-				<div class="processes-stats__content">{{ timer$ | async }}</div>
+				<div class="processes-stats__content">{{ timerInSeconds$ | async | number:'1.0-0'}}</div>
 			</div>
 
 			<div>

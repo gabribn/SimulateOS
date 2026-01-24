@@ -115,7 +115,6 @@ export class BlocksState {
 		const blocks = [...state.blocks];
 		const swapBlocks = [...state.swapBlocks]
 		const { memoryBlocksRequired } = action.payload;
-		const currentIds = state.allocationOrderIds || [];
 
 		const emptyBlocksLength = blocks.filter((block) => !block.process).length + swapBlocks.filter((block) => !block.process).length;
 
@@ -123,10 +122,6 @@ export class BlocksState {
 			console.log("Memória insuficiente")
 			return;
 		}
-
-		context.patchState({
-        	allocationOrderIds: [...currentIds, action.payload.process.id]
-    	});
 
 		this.runMemoryBlockScaling(context, action);
 		this.saveStateToLocalStorage(context.getState());
@@ -141,6 +136,7 @@ export class BlocksState {
 		const blocks = state.blocks.map(b => ({ ...b }));
 		const swapBlocks = state.swapBlocks.map(b => ({ ...b }));
 		const process = action.process;
+		let allocationOrderIds = [...state.allocationOrderIds];
 
 		const isAlreadyInPhysicalMemory = blocks.some(b => b.process?.id === process.id);
 
@@ -159,7 +155,8 @@ export class BlocksState {
 					blocks, 
 					swapBlocks, 
 					swapIdx, 
-					state.blockScaling
+					state.blockScaling,
+					allocationOrderIds
 				);
 				
 				if (!moved) {
@@ -167,7 +164,11 @@ export class BlocksState {
 				}
 			});
 
-			context.patchState({ blocks, swapBlocks });
+			if (!allocationOrderIds.includes(process.id)) {
+                allocationOrderIds.push(process.id);
+            }
+
+			context.patchState({ blocks, swapBlocks, allocationOrderIds });
 		}
 	}
 
@@ -375,7 +376,9 @@ export class BlocksState {
     blockIndexToSwap: number
 	): boolean {
 		const victimProcess = blocks[blockIndexToSwap].process;
-		if (!victimProcess) return false;
+		if (!victimProcess){
+			return false;
+		} 
 
 		const processId = victimProcess.id;
 
@@ -414,16 +417,27 @@ export class BlocksState {
 		blocks: Box[],
 		swapBlocks: Box[],
 		swapIndexToMove: number,
-		algorithm: BlocksScalingTypesEnum 
+		algorithm: BlocksScalingTypesEnum,
+		allocationOrderIds: string[]
 	): boolean {
 		let freePhysicalIndex = blocks.findIndex(b => b.process === null);
 
 		if (freePhysicalIndex === -1) {
-			const victimIndex = this.getVictimBlockIndex(blocks, algorithm);
+			const victimIndex = this.getVictimBlockIndex(blocks, algorithm, allocationOrderIds);
 
 			if (victimIndex !== -1) {
+				const victimProcess = blocks[victimIndex].process;
 				const movedToSwap = this.moveBlocksToSwap(blocks, swapBlocks, victimIndex);
-				if (!movedToSwap) return false;
+				if (!movedToSwap){
+					return false;
+				} 
+
+				if (victimProcess) {
+                    const idIndex = allocationOrderIds.indexOf(victimProcess.id);
+                    if (idIndex > -1) {
+                        allocationOrderIds.splice(idIndex, 1);
+                    }
+                }
 				
 				freePhysicalIndex = victimIndex;
 			} else {
@@ -449,7 +463,8 @@ export class BlocksState {
 
 	private getVictimBlockIndex(
 		blocks: Box[], 
-		algorithm: BlocksScalingTypesEnum
+		algorithm: BlocksScalingTypesEnum,
+		allocationOrderIds: string[]
 	): number {
 		const occupiedIndices = blocks
 			.map((b, i) => b.process !== null ? i : -1)
@@ -461,12 +476,16 @@ export class BlocksState {
 			new Set(occupiedIndices.map(i => blocks[i].process!))
 		);
 
-		let victimProcess: Process;
+		let victimProcess: Process | undefined;
 
 		switch (algorithm) {
 			case BlocksScalingTypesEnum.FIFO:
-				victimProcess = processesInMemory.sort((a, b) => a.timeCreated - b.timeCreated)[0];
-				break;
+				const firstInId = allocationOrderIds[0];
+                victimProcess = processesInMemory.find(p => p.id === firstInId);
+				if(!victimProcess){
+					debugger;
+				}
+                break;
 
 			case BlocksScalingTypesEnum.LRU:
 				victimProcess = processesInMemory.sort((a, b) => 
@@ -484,7 +503,7 @@ export class BlocksState {
 				break;
 		}
 
-		return blocks.findIndex(b => b.process?.id === victimProcess.id);
+		return blocks.findIndex(b => b.process?.id === victimProcess?.id);
 	}
 
 	private runFIFO(
@@ -494,7 +513,10 @@ export class BlocksState {
 		const state = context.getState();
 		const blocks = [...state.blocks];
 		const swapBlocks = [...state.swapBlocks];
+		let allocationOrderIds = [...(state.allocationOrderIds || [])];
+
 		const { process, memoryBlocksRequired } = action.payload || {};
+
 		if (!process || !memoryBlocksRequired) {
 			console.error('Processo ou quantidade de blocos necessários ausentes.');
 			return;
@@ -505,36 +527,35 @@ export class BlocksState {
 			.map((block, index) => ({ block, index }))
 			.filter(({ block }) => !block.process);
 
-		if (emptyBlocks.length < memoryBlocksRequired) {
-			const allProcesses = blocks
-				.filter(block => block.process !== null)
-				.map(block => block.process!)
-				.sort((a, b) => a.timeCreated - b.timeCreated);
+		while (emptyBlocks.length < memoryBlocksRequired && allocationOrderIds.length > 0) {
+			const victimProcessId = allocationOrderIds[0];
 
-			while (emptyBlocks.length < memoryBlocksRequired && allProcesses.length > 0) {
-				const oldestProcess = allProcesses.shift();
+			const occupiedIndices = blocks
+				.map((b, i) => (b.process?.id === victimProcessId ? i : -1))
+				.filter(i => i !== -1);
 
-				if (oldestProcess) {
-					const occupiedIndices = blocks
-						.map((b, i) => (b.process?.id === oldestProcess.id ? i : -1))
-						.filter(i => i !== -1);
+			let freedCount = 0;
 
-					for (const idx of occupiedIndices) {
-						const moved = this.moveToSwap(blocks, swapBlocks, idx);
-						if (moved) {
-							emptyBlocks.push({ block: blocks[idx], index: idx });
-						} else {
-							break;
-						}
-					}
+			for (const idx of occupiedIndices) {
+				const moved = this.moveToSwap(blocks, swapBlocks, idx);
+				if (moved) {
+					emptyBlocks.push({ block: blocks[idx], index: idx });
+					freedCount++;
+				} else {
+					console.warn("SWAP cheio durante a migração FIFO.");
+					break;
 				}
 			}
 
-			if (emptyBlocks.length < memoryBlocksRequired) {
-				console.error('Memória Física e SWAP insuficientes.');
-				return;
-			}
+			const removedId = allocationOrderIds.shift();
+            console.log(`Processo ${removedId} movido para SWAP.`);
 		}
+
+		if (emptyBlocks.length < memoryBlocksRequired) {
+			console.error('Memória Física e SWAP insuficientes.');
+			return;
+		}
+
 
 		// Embaralhar a lista de blocos vazios para evitar alocação contígua
 		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
@@ -550,8 +571,10 @@ export class BlocksState {
 			.filter((block) => block.process?.id === process.id)
 			.map((block) => block.index);
 
+		allocationOrderIds.push(process.id);
+
 		// Atualizar o estado global com os novos blocos alocados
-		context.patchState({ blocks, swapBlocks });
+		context.patchState({ blocks, swapBlocks, allocationOrderIds });
 		console.log(`Blocos alocados via FIFO com SWAP: ${process.allocatedBlocks}`);
 	}
 
@@ -691,13 +714,19 @@ export class BlocksState {
 		context: StateContext<BlocksStateModel>,
 		action: BlocksAction.ReleaseBlocks
 	) {
-		const { blocks, swapBlocks } = context.getState();
+		const { blocks, swapBlocks, allocationOrderIds } = context.getState();
+		const targetId = action.payload.id;
+
+		const idsToRemove = new Set<string>([targetId]);
 
 		const newBlocks = blocks.map((block) => {
 			if (
 				block.process?.state === 'finished' ||
-				block.process?.id === action.payload.id
+				block.process?.id === targetId
 			) {
+				if (block.process?.id) {
+                    idsToRemove.add(block.process.id);
+                }
 				return { process: null, index: block.index }; // Manter o índice do bloco
 			} else {
 				return block; // Manter o bloco como está
@@ -707,14 +736,22 @@ export class BlocksState {
 		const newSwapBlocks = swapBlocks.map((block) => {
 			if (
 				block.process?.state === 'finished' ||
-				block.process?.id === action.payload.id
+				block.process?.id === targetId
 			) {
 				return { process: null, index: block.index };
 			}
 			return block;
 		});
 
-		context.patchState({ blocks: newBlocks, swapBlocks: newSwapBlocks });
+		const currentOrderIds = allocationOrderIds || [];
+        const newAllocationOrderIds = currentOrderIds.filter(id => !idsToRemove.has(id));
+
+		context.patchState({ 
+            blocks: newBlocks, 
+            swapBlocks: newSwapBlocks,
+            allocationOrderIds: newAllocationOrderIds 
+        });
+
 		this.saveStateToLocalStorage(context.getState());
 	}
 
