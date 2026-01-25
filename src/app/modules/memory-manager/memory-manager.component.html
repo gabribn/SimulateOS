@@ -103,17 +103,25 @@
 			<div class="process-memory__wrapper-pages">
 				<div *ngFor="let process of notFinishedProcesses">
 					<div class="process-row">
-						<!-- Exibe o ID do processo e as páginas lado a lado -->
 						<div
 							*ngFor="let pageNumber of getPageNumbers(process)"
+							class="memory-container"
+							[ngClass]="process.swap ? 'swap' : 'fisica'"
+						>
+							<div
 							class="page-rectangle"
 							[ngStyle]="{ 'background-color': process.color }"
 							(click)="editProcess(process)"
-						>
+							>
 							Processo: <br />{{ process.id }} <br />
 							Página: {{ pageNumber }}
+							</div>
+
+							<div class="memory-type">
+							{{ process.swap ? 'SWAP' : 'FÍSICA' }}
+							</div>
 						</div>
-					</div>
+						</div>
 				</div>
 			</div>
 		</div>

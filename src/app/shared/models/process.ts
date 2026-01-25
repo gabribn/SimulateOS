@@ -17,6 +17,7 @@ export interface Process {
 	allocatedBlocks?: number[];
 	pages: {pageNumber: number}[];
 	lastAccessed?: number;
+	swap?: boolean;
 }
 
 export interface CreateProcessDTO {

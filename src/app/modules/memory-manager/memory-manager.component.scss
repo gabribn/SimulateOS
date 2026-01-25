@@ -39,27 +39,55 @@ app-header {
   width: 100%;
 }
 
-.page-rectangle{
-	width: 90px;
-	height: 120px;
-  margin: 5px 0;
+.memory-container {
+  background-color: #ffffff;
+  border: 2px solid #bdbdbd;
+  padding: 6px;
+  width: 110px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.page-rectangle {
+  width: 90px;
+  height: 100px;
+  margin: 0 auto;
   text-align: center;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   font-weight: bold;
   color: white;
   border-radius: 5px;
-	white-space: nowrap;
+  white-space: nowrap;
   cursor: pointer;
-	margin-right: 10px;
 }
 
 .page-rectangle:hover {
   background-color: #e0e0e0;
 }
 
+.memory-type {
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: 900;
+  border-radius: 12px;
+  background-color: #fff;
+  display: inline-block;
+}
 
+.fisica .memory-type {
+  border: 2px solid #2e7d32;
+  color: #2e7d32;
+}
+
+.swap .memory-type {
+  border: 2px solid #c62828;
+  color: #c62828;
+}
 
 .process-pages-row {
   display: flex;

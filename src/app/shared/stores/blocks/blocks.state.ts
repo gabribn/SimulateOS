@@ -365,6 +365,10 @@ export class BlocksState {
 
 		swapBlocks[freeSwapIndex].process = blocks[blockIndexToSwap].process;
 
+		if (swapBlocks[freeSwapIndex].process) {
+			swapBlocks[freeSwapIndex].process!.swap = true;
+		}
+
 		blocks[blockIndexToSwap].process = null;
 
 		return true;
@@ -408,6 +412,7 @@ export class BlocksState {
 		const movedProcess = swapBlocks[newSwapIndices[0]].process;
 		if (movedProcess) {
 			movedProcess.allocatedBlocks = newSwapIndices;
+			movedProcess.swap = true;
 		}
 
 		return true;
@@ -447,6 +452,8 @@ export class BlocksState {
 
 		const targetProcess = swapBlocks[swapIndexToMove].process;
 		if (!targetProcess) return false;
+
+		targetProcess.swap = false;
 
 		blocks[freePhysicalIndex] = { ...blocks[freePhysicalIndex], process: targetProcess };
 
