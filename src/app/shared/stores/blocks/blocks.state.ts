@@ -453,6 +453,8 @@ export class BlocksState {
 		const targetProcess = swapBlocks[swapIndexToMove].process;
 		if (!targetProcess) return false;
 
+		targetProcess.lastAccessed = performance.now();
+
 		targetProcess.swap = false;
 
 		blocks[freePhysicalIndex] = { ...blocks[freePhysicalIndex], process: targetProcess };
@@ -593,62 +595,79 @@ export class BlocksState {
 		const blocks = [...state.blocks];
 		const swapBlocks = [...state.swapBlocks];
 		const { process, memoryBlocksRequired } = action.payload || {};
+
+		let allocationOrderIds = [...(state.allocationOrderIds || [])];
+
 		if (!process || !memoryBlocksRequired) {
 			return;
 		}
-
-		// Mapeamento dos blocos para manter o rastreamento do uso
-		const lruList: number[] = [];
-
-		// Inicializar a lista LRU com os blocos alocados
-		blocks.forEach((block, index) => {
-			if (block.process) {
-				lruList.push(index); // Adiciona os índices dos blocos usados à lista LRU
-			}
-		});
 
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
 			.filter(({ block }) => !block.process);
 
-		if (emptyBlocks.length < memoryBlocksRequired) {
-			while (emptyBlocks.length < memoryBlocksRequired && lruList.length > 0) {
-				const leastRecentlyUsedIndex = lruList.shift();
+		while (emptyBlocks.length < memoryBlocksRequired) {
+			const occupiedIndices = blocks
+				.map((b, i) => (b.process ? i : -1))
+				.filter(i => i !== -1);
 
-				if (leastRecentlyUsedIndex !== undefined) {
-					const moved = this.moveToSwap(blocks, swapBlocks, leastRecentlyUsedIndex);
-					if (moved) {
-						emptyBlocks.push({
-							block: blocks[leastRecentlyUsedIndex],
-							index: leastRecentlyUsedIndex,
-						});
-					} else {
-						break;
-					}
+			if (occupiedIndices.length === 0) {
+				break;
+			}
+
+			const processesInMemory = Array.from(
+				new Set(occupiedIndices.map(i => blocks[i].process!))
+			);
+
+			const victimProcess = processesInMemory.sort((a, b) => 
+				(a.lastAccessed || 0) - (b.lastAccessed || 0)
+			)[0];
+
+			if (!victimProcess) break; 
+
+			console.log(`Vítima LRU escolhida: ${victimProcess.id} (Último acesso: ${victimProcess.lastAccessed})`);
+
+			const victimIndices = blocks
+				.map((b, i) => (b.process?.id === victimProcess.id ? i : -1))
+				.filter(i => i !== -1);
+
+			for (const idx of victimIndices) {
+				const moved = this.moveToSwap(blocks, swapBlocks, idx);
+				if (moved) {
+					emptyBlocks.push({ block: blocks[idx], index: idx });
+				} else {
+					console.warn("SWAP cheio durante a migração LRU.");
+					break; 
 				}
 			}
 
-			if (emptyBlocks.length < memoryBlocksRequired) {
-				console.error('Memória Física e SWAP insuficientes.');
-				return;
+			const idIndex = allocationOrderIds.indexOf(victimProcess.id);
+			if (idIndex > -1) {
+				allocationOrderIds.splice(idIndex, 1);
 			}
 		}
 
-		// Embaralhar os blocos vazios para garantir alocação não contígua
-		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
-
-		// Alocar blocos não contiguamente para o processo
-		let allocatedBlocks: number[] = [];
-		for (let i = 0; i < memoryBlocksRequired; i++) {
-			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { process, index: blockIndex }; // Aloca o bloco
-			allocatedBlocks.push(blockIndex);
+		if (emptyBlocks.length < memoryBlocksRequired) {
+			console.error('Memória Física e SWAP insuficientes.');
+			return;
 		}
 
-		process.allocatedBlocks = allocatedBlocks;
-		context.patchState({ blocks, swapBlocks });
+		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
 
-		console.log(`Blocos alocados via LRU com SWAP: ${allocatedBlocks}`);
+		for (let i = 0; i < memoryBlocksRequired; i++) {
+			const { index: blockIndex } = emptyBlocks[i];
+			blocks[blockIndex] = { process, index: blockIndex };
+		}
+
+		process.allocatedBlocks = blocks
+			.filter((block) => block.process?.id === process.id)
+			.map((block) => block.index);
+
+		process.lastAccessed = performance.now();
+		allocationOrderIds.push(process.id);
+
+		context.patchState({ blocks, swapBlocks, allocationOrderIds });
+    	console.log(`Blocos alocados via LRU: ${process.allocatedBlocks}`);
 	}
 
 	private runNRU(
