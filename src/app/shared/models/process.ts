@@ -18,6 +18,8 @@ export interface Process {
 	pages: {pageNumber: number}[];
 	lastAccessed?: number;
 	swap?: boolean;
+	referenced?: boolean;
+    modified?: boolean;
 }
 
 export interface CreateProcessDTO {

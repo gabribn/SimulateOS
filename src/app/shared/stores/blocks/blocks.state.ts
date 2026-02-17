@@ -142,6 +142,17 @@ export class BlocksState {
 
 		if (isAlreadyInPhysicalMemory) {
 			console.log(`Processo ${process.id} já está na memória física.`);
+			blocks.forEach(b => {
+                if (b.process?.id === process.id) {
+                    b.process = {
+                        ...b.process,
+                        referenced: true,
+                        lastAccessed: performance.now() 
+                    };
+                }
+            });
+
+            context.patchState({ blocks });
 			return;
 		}
 
@@ -171,6 +182,42 @@ export class BlocksState {
 			context.patchState({ blocks, swapBlocks, allocationOrderIds });
 		}
 	}
+
+	@Action(BlocksAction.ClearReferenceBits)
+    clearReferenceBits(context: StateContext<BlocksStateModel>) {
+        const state = context.getState();
+        
+        const updatedBlocks = state.blocks.map(box => {
+            if (box.process) {
+                return {
+                    ...box, 
+                    process: {
+                        ...box.process, 
+                        referenced: false
+                    }
+                };
+            }
+            return box; 
+        });
+
+        const updatedSwapBlocks = state.swapBlocks.map(box => {
+            if (box.process) {
+                return {
+                    ...box,
+                    process: {
+                        ...box.process,
+                        referenced: false
+                    }
+                };
+            }
+            return box;
+        });
+
+        context.patchState({ 
+            blocks: updatedBlocks,
+            swapBlocks: updatedSwapBlocks
+        });
+    }
 
 	runFirstFit(
 		context: StateContext<BlocksStateModel>,
@@ -457,6 +504,8 @@ export class BlocksState {
 
 		targetProcess.swap = false;
 
+		targetProcess.referenced = true;
+
 		blocks[freePhysicalIndex] = { ...blocks[freePhysicalIndex], process: targetProcess };
 
 		if (targetProcess.allocatedBlocks) {
@@ -503,9 +552,28 @@ export class BlocksState {
 				break;
 
 			case BlocksScalingTypesEnum.NRU:
-				const randomIndex = Math.floor(Math.random() * processesInMemory.length);
-				victimProcess = processesInMemory[randomIndex];
-				break;
+                const class0: Process[] = []; 
+                const class1: Process[] = []; 
+                const class2: Process[] = []; 
+                const class3: Process[] = []; 
+
+                processesInMemory.forEach(p => {
+                    const r = p.referenced || false;
+                    const m = p.modified || false;
+                    if (!r && !m) class0.push(p);
+                    else if (!r && m) class1.push(p);
+                    else if (r && !m) class2.push(p);
+                    else class3.push(p);
+                });
+
+                const targetClass = class0.length > 0 ? class0 :
+                                    class1.length > 0 ? class1 :
+                                    class2.length > 0 ? class2 :
+                                    class3;
+
+                const randomIdx = Math.floor(Math.random() * targetClass.length);
+                victimProcess = targetClass[randomIdx];
+                break;
 
 			default:
 				victimProcess = processesInMemory.sort((a, b) => a.timeCreated - b.timeCreated)[0];
@@ -678,6 +746,7 @@ export class BlocksState {
 		const blocks = [...state.blocks];
 		const swapBlocks = [...state.swapBlocks];
 		const { process, memoryBlocksRequired } = action.payload || {};
+		let allocationOrderIds = [...(state.allocationOrderIds || [])];
 
 		if (!process || !memoryBlocksRequired) {
 			console.error('Processo ou quantidade de blocos necessários ausentes.');
@@ -688,49 +757,80 @@ export class BlocksState {
 			.map((block, index) => ({ block, index }))
 			.filter(({ block }) => !block.process);
 
-		if (emptyBlocks.length < memoryBlocksRequired) {
-			const processIdsInMemory = Array.from(new Set(
-				blocks
-					.filter(b => b.process !== null && b.process.id !== process.id)
-					.map(b => b.process!.id)
-			));
+		while (emptyBlocks.length < memoryBlocksRequired) {
+			const occupiedIndices = blocks
+				.map((b, i) => (b.process ? i : -1))
+				.filter(i => i !== -1);
 
-			while (emptyBlocks.length < memoryBlocksRequired && processIdsInMemory.length > 0) {
+			if (occupiedIndices.length === 0) break;
 
-				const randomIndex = Math.floor(Math.random() * processIdsInMemory.length);
-				const victimProcessId = processIdsInMemory.splice(randomIndex, 1)[0];
+			const processesInMemory = Array.from(
+				new Set(occupiedIndices.map(i => blocks[i].process!))
+			);
 
-				const victimBlocksIndices = blocks
-					.map((b, i) => (b.process?.id === victimProcessId ? i : -1))
-					.filter(i => i !== -1);
+			const class0: any[] = []; 
+			const class1: any[] = []; 
+			const class2: any[] = []; 
+			const class3: any[] = []; 
 
-				victimBlocksIndices.forEach(idx => {
-					const moved = this.moveToSwap(blocks, swapBlocks, idx);
-					if (moved) {
-						emptyBlocks.push({ block: blocks[idx], index: idx });
-					}
-				});
+			processesInMemory.forEach(p => {
+				const r = p.referenced || false; 
+				const m = p.modified || false;
+				if (!r && !m) class0.push(p);
+				else if (!r && m) class1.push(p);
+				else if (r && !m) class2.push(p);
+				else class3.push(p);
+			});
+
+			const targetClass = class0.length > 0 ? class0 :
+								class1.length > 0 ? class1 :
+								class2.length > 0 ? class2 :
+								class3;
+
+			if (targetClass.length === 0) break;
+
+			const randomIndex = Math.floor(Math.random() * targetClass.length);
+			const victimProcess = targetClass[randomIndex];
+
+			const victimIndices = blocks
+				.map((b, i) => (b.process?.id === victimProcess.id ? i : -1))
+				.filter(i => i !== -1);
+
+			for (const idx of victimIndices) {
+				const moved = this.moveToSwap(blocks, swapBlocks, idx);
+				if (moved) {
+					emptyBlocks.push({ block: blocks[idx], index: idx });
+				} else {
+					console.warn("SWAP cheio durante a migração NRU.");
+					break; 
+				}
 			}
 
-			if (emptyBlocks.length < memoryBlocksRequired) {
-				console.error('Memória Física e SWAP insuficientes mesmo após remoção por processo.');
-				return;
+			const idIndex = allocationOrderIds.indexOf(victimProcess.id);
+			if (idIndex > -1) {
+				allocationOrderIds.splice(idIndex, 1);
 			}
 		}
 
-		// 3. Alocação (mantendo sua lógica de espalhamento se desejar)
+		if (emptyBlocks.length < memoryBlocksRequired) {
+			console.error('Memória Física e SWAP insuficientes mesmo após remoção por NRU.');
+			return;
+		}
+
 		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
 
 		let allocatedBlocks: number[] = [];
 		for (let i = 0; i < memoryBlocksRequired; i++) {
 			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { ...blocks[blockIndex], process: process };
+			blocks[blockIndex] = { ...blocks[blockIndex], process: { ...process, referenced: true } };
 			allocatedBlocks.push(blockIndex);
 		}
 
 		process.allocatedBlocks = allocatedBlocks;
+		process.referenced = true;
+		allocationOrderIds.push(process.id);
 
-		context.patchState({ blocks, swapBlocks });
+		context.patchState({ blocks, swapBlocks, allocationOrderIds });
 		console.log(`Processo ${process.id} alocado. Blocos: ${allocatedBlocks}`);
 	}
 

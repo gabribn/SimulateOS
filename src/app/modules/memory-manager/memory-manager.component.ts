@@ -38,6 +38,7 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		Process[]
 	>;
 	private _notifier$ = new Subject<void>();
+	private lastNruClearTime = 0;
 
 	timerInSeconds$!: Observable<number>;
 
@@ -66,6 +67,29 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 					this.notFinishedProcesses = updatedProcesses;
 				}
 			});
+
+        this.timerInSeconds$
+            .pipe(takeUntil(this._notifier$))
+            .subscribe((seconds: number) => {
+                
+                const CLOCK_INTERRUPT_INTERVAL = 15; 
+
+                if (seconds < this.lastNruClearTime) {
+                    this.lastNruClearTime = 0;
+                }
+
+                if (seconds - this.lastNruClearTime >= CLOCK_INTERRUPT_INTERVAL) {
+                    
+                    this.lastNruClearTime = seconds;
+
+                    const currentAlgorithm = this.store.selectSnapshot(BlocksState.getBlockScaling);
+
+                    if (currentAlgorithm === BlocksScalingTypesEnum.NRU) {
+                        this.store.dispatch(new BlocksAction.ClearReferenceBits());
+                        console.log(`[Clock Interrupt] Relógio bateu ${seconds.toFixed(2)}s. Bits do NRU zerados.`);
+                    }
+                }
+            });
 	}
 
 	openBlockScalingTypeDialog(): void {

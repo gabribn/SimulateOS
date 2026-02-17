@@ -27,8 +27,12 @@ export namespace BlocksAction {
   }
 
   export class BringToPhysicalMemory {
-        static readonly type = '[Blocks] Bring To Physical Memory';
-        constructor(public process: Process) {}
-    }
+      static readonly type = '[Blocks] Bring To Physical Memory';
+      constructor(public process: Process) {}
+  }
+
+  export class ClearReferenceBits {
+    static readonly type = '[Blocks] Clear Reference Bits';
+  }
 
 }
