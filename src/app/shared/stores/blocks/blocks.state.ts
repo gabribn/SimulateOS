@@ -819,15 +819,17 @@ export class BlocksState {
 
 		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
 
+		process.referenced = true;
+
 		let allocatedBlocks: number[] = [];
 		for (let i = 0; i < memoryBlocksRequired; i++) {
 			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { ...blocks[blockIndex], process: { ...process, referenced: true } };
+			blocks[blockIndex] = { process, index: blockIndex };
 			allocatedBlocks.push(blockIndex);
 		}
 
 		process.allocatedBlocks = allocatedBlocks;
-		process.referenced = true;
+		
 		allocationOrderIds.push(process.id);
 
 		context.patchState({ blocks, swapBlocks, allocationOrderIds });
