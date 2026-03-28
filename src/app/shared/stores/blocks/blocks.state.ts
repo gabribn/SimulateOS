@@ -142,17 +142,14 @@ export class BlocksState {
 
 		if (isAlreadyInPhysicalMemory) {
 			console.log(`Processo ${process.id} já está na memória física.`);
-			blocks.forEach(b => {
-                if (b.process?.id === process.id) {
-                    b.process = {
-                        ...b.process,
-                        referenced: true,
-                        lastAccessed: performance.now() 
-                    };
-                }
-            });
+			blocks.forEach((b) => {
+				if (b.process?.id === process.id) {
+					b.process.referenced = true;
+					b.process.lastAccessed = performance.now();
+				}
+			});
 
-            context.patchState({ blocks });
+			context.patchState({ blocks });
 			return;
 		}
 
@@ -184,40 +181,30 @@ export class BlocksState {
 	}
 
 	@Action(BlocksAction.ClearReferenceBits)
-    clearReferenceBits(context: StateContext<BlocksStateModel>) {
-        const state = context.getState();
-        
-        const updatedBlocks = state.blocks.map(box => {
-            if (box.process) {
-                return {
-                    ...box, 
-                    process: {
-                        ...box.process, 
-                        referenced: false
-                    }
-                };
-            }
-            return box; 
-        });
+	clearReferenceBits(context: StateContext<BlocksStateModel>) {
+		const state = context.getState();
 
-        const updatedSwapBlocks = state.swapBlocks.map(box => {
-            if (box.process) {
-                return {
-                    ...box,
-                    process: {
-                        ...box.process,
-                        referenced: false
-                    }
-                };
-            }
-            return box;
-        });
+		// Shallow-copy boxes but keep the same Process references as ProcessesState so
+		// swap flags stay aligned with the page table (it reads processes from data).
+		const blocks = state.blocks.map((box) => ({ ...box }));
+		blocks.forEach((box) => {
+			if (box.process) {
+				box.process.referenced = false;
+			}
+		});
 
-        context.patchState({ 
-            blocks: updatedBlocks,
-            swapBlocks: updatedSwapBlocks
-        });
-    }
+		const swapBlocks = state.swapBlocks.map((box) => ({ ...box }));
+		swapBlocks.forEach((box) => {
+			if (box.process) {
+				box.process.referenced = false;
+			}
+		});
+
+		context.patchState({
+			blocks,
+			swapBlocks,
+		});
+	}
 
 	runFirstFit(
 		context: StateContext<BlocksStateModel>,
