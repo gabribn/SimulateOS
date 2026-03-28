@@ -4,4 +4,76 @@
       height: 24px;
       border-radius: 50%;
     }
+
+    &__historico-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    &__historico-empty {
+      margin: 0;
+      color: rgba(0, 0, 0, 0.54);
+      font-size: 14px;
+    }
+
+    &__historico-list {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    &__historico-item {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 8px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 2px solid #bdbdbd;
+      font-size: 14px;
+
+      &--physical {
+        border-color: #2e7d32;
+        background-color: rgba(46, 125, 50, 0.08);
+      }
+
+      &--swap {
+        border-color: #c62828;
+        background-color: rgba(198, 40, 40, 0.08);
+      }
+
+      &--focus {
+        box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.35);
+      }
+    }
+
+    &__historico-seq {
+      font-variant-numeric: tabular-nums;
+      color: rgba(0, 0, 0, 0.45);
+      min-width: 2.5em;
+    }
+
+    &__historico-page {
+      font-weight: 600;
+    }
+
+    &__historico-badge {
+      margin-left: auto;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    &__historico-item--physical &__historico-badge {
+      border: 2px solid #2e7d32;
+      color: #2e7d32;
+    }
+
+    &__historico-item--swap &__historico-badge {
+      border: 2px solid #c62828;
+      color: #c62828;
+    }
   }  

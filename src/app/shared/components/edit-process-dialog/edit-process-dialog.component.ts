@@ -5,9 +5,20 @@ import { ScalingTypesEnum } from 'src/app/shared/constants/scaling-types.constan
 import { BlocksScalingTypesEnum } from 'src/app/shared/constants/blocks-types.contants';
 import { ProcessColors } from 'src/app/shared/constants/process-colors.constants';
 import { ProcessTypes, ProcessTypesNames } from 'src/app/shared/constants/process-types.constants';
-import { Process } from 'src/app/shared/models/process';
+import {
+	PageAllocationHistoryEntry,
+	Process,
+} from 'src/app/shared/models/process';
 import { BlocksAction } from 'src/app/shared/stores/blocks/blocks.action';
+import { BlocksState } from 'src/app/shared/stores/blocks/blocks.state';
+import { ProcessesState } from 'src/app/shared/stores/processes/processes.state';
 import { Store } from '@ngxs/store';
+
+export interface EditProcessDialogData {
+	process: Process;
+	blockScaling?: BlocksScalingTypesEnum;
+	focusPageNumber?: number;
+}
 
 @Component({
   selector: 'app-edit-process-dialog',
@@ -38,7 +49,7 @@ export class EditProcessDialogComponent implements OnInit {
 
   constructor(
     public dialogRef: MatDialogRef<EditProcessDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: any, // Recebendo process e blockScaling
+    @Inject(MAT_DIALOG_DATA) public data: EditProcessDialogData,
     private readonly formBuilder: FormBuilder,
     private store: Store
   ) {
@@ -50,19 +61,33 @@ export class EditProcessDialogComponent implements OnInit {
       state: [data.process.state],
       type: [data.process.type],
       color: [data.process.color],
-      isAvailable: [data.process.isAvailable],
+      isAvailable: [data.process.isAvailable ?? true],
     });
   }
 
   ngOnInit(): void {
+    const blockScaling =
+      this.data.blockScaling ??
+      this.store.selectSnapshot(BlocksState.getBlockScaling);
+
     // Verifica se o escalonamento atual é baseado em páginas (FIFO, LRU, NRU)
     this.isPagingMode =
-      this.data.blockScaling === BlocksScalingTypesEnum.FIFO ||
-      this.data.blockScaling === BlocksScalingTypesEnum.LRU ||
-      this.data.blockScaling === BlocksScalingTypesEnum.NRU;
+      blockScaling === BlocksScalingTypesEnum.FIFO ||
+      blockScaling === BlocksScalingTypesEnum.LRU ||
+      blockScaling === BlocksScalingTypesEnum.NRU;
 
-    // Mantendo o uso de ScalingTypesEnum para definir se o processo é editável
-    this.isEditable = this.data.blockScaling === ScalingTypesEnum.CircularWithPriorities;
+    // Edição de prioridade só no escalonamento de CPU com prioridades (não confundir com memória)
+    this.isEditable =
+      this.store.selectSnapshot(ProcessesState.getCurrentScalingType) ===
+      ScalingTypesEnum.CircularWithPriorities;
+  }
+
+  get pageAllocationHistoryOrdered(): PageAllocationHistoryEntry[] {
+    const h = this.data.process.pageAllocationHistory;
+    if (!h?.length) {
+      return [];
+    }
+    return [...h].sort((a, b) => a.sequence - b.sequence);
   }
 
   // Organiza os blocos em páginas se for escalonamento baseado em páginas

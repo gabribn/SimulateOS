@@ -144,7 +144,7 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		});
 	}
 
-	editProcess(process: Process) {
+	editProcess(process: Process, focusPageNumber?: number) {
 		// Obtém o tipo de escalonamento atual
 		const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
 
@@ -154,6 +154,7 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 			data: {
 				process,
 				blockScaling, // Passa o tipo de escalonamento atual para o diálogo
+				focusPageNumber,
 			},
 		});
 

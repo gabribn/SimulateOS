@@ -33,6 +33,8 @@ export const BLOCKS_STATE_INITIAL_STATE: BlocksStateModel = {
 })
 @Injectable()
 export class BlocksState {
+	private static readonly PAGING_BLOCKS_PER_PAGE = 5;
+
 	constructor(private store: Store) {
 		this.loadStateFromLocalStorage();
 		window.addEventListener(
@@ -385,6 +387,47 @@ export class BlocksState {
 		context.patchState({ blocks });
 	}
 
+	private appendPageLocationEvent(
+		process: Process,
+		pageNumber: number,
+		location: 'physical' | 'swap'
+	): void {
+		if (!process.pageAllocationHistory) {
+			process.pageAllocationHistory = [];
+		}
+		const h = process.pageAllocationHistory;
+		const nextSeq =
+			h.length === 0 ? 1 : Math.max(...h.map((e) => e.sequence)) + 1;
+		h.push({ sequence: nextSeq, pageNumber, location });
+	}
+
+	/** Logical page (same grouping as “Páginas e Blocos”, 5 blocos por página). */
+	private pageNumberForAllocatedBlockIndex(
+		process: Process,
+		ramOrSwapSlotIndex: number
+	): number {
+		const alloc = process.allocatedBlocks || [];
+		const pos = alloc.indexOf(ramOrSwapSlotIndex);
+		if (pos < 0) {
+			return 1;
+		}
+		return (
+			Math.floor(pos / BlocksState.PAGING_BLOCKS_PER_PAGE) + 1
+		);
+	}
+
+	private recordInitialPhysicalPages(
+		process: Process,
+		memoryBlocksRequired: number
+	): void {
+		const numPages = Math.ceil(
+			memoryBlocksRequired / BlocksState.PAGING_BLOCKS_PER_PAGE
+		);
+		for (let p = 1; p <= numPages; p++) {
+			this.appendPageLocationEvent(process, p, 'physical');
+		}
+	}
+
 	private moveToSwap(
 		blocks: Box[],
 		swapBlocks: Box[],
@@ -395,6 +438,15 @@ export class BlocksState {
 		if (freeSwapIndex === -1) {
 			console.error('Memória SWAP cheia! Não é possível realizar a troca.');
 			return false;
+		}
+
+		const proc = blocks[blockIndexToSwap].process;
+		if (proc) {
+			const pageNum = this.pageNumberForAllocatedBlockIndex(
+				proc,
+				blockIndexToSwap
+			);
+			this.appendPageLocationEvent(proc, pageNum, 'swap');
 		}
 
 		swapBlocks[freeSwapIndex].process = blocks[blockIndexToSwap].process;
@@ -437,6 +489,12 @@ export class BlocksState {
 		const newSwapIndices: number[] = [];
 
 		physicalIndices.forEach((physIdx, iteration) => {
+			const pageNum = this.pageNumberForAllocatedBlockIndex(
+				victimProcess,
+				physIdx
+			);
+			this.appendPageLocationEvent(victimProcess, pageNum, 'swap');
+
 			const targetSwapIdx = freeSwapIndices[iteration];
 			swapBlocks[targetSwapIdx].process = blocks[physIdx].process;
 			newSwapIndices.push(targetSwapIdx);
@@ -486,6 +544,12 @@ export class BlocksState {
 
 		const targetProcess = swapBlocks[swapIndexToMove].process;
 		if (!targetProcess) return false;
+
+		const pageNum = this.pageNumberForAllocatedBlockIndex(
+			targetProcess,
+			swapIndexToMove
+		);
+		this.appendPageLocationEvent(targetProcess, pageNum, 'physical');
 
 		targetProcess.lastAccessed = performance.now();
 
@@ -637,6 +701,8 @@ export class BlocksState {
 
 		allocationOrderIds.push(process.id);
 
+		this.recordInitialPhysicalPages(process, memoryBlocksRequired);
+
 		// Atualizar o estado global com os novos blocos alocados
 		context.patchState({ blocks, swapBlocks, allocationOrderIds });
 		console.log(`Blocos alocados via FIFO com SWAP: ${process.allocatedBlocks}`);
@@ -720,6 +786,8 @@ export class BlocksState {
 
 		process.lastAccessed = performance.now();
 		allocationOrderIds.push(process.id);
+
+		this.recordInitialPhysicalPages(process, memoryBlocksRequired);
 
 		context.patchState({ blocks, swapBlocks, allocationOrderIds });
     	console.log(`Blocos alocados via LRU: ${process.allocatedBlocks}`);
@@ -816,6 +884,8 @@ export class BlocksState {
 		}
 
 		process.allocatedBlocks = allocatedBlocks;
+
+		this.recordInitialPhysicalPages(process, memoryBlocksRequired);
 		
 		allocationOrderIds.push(process.id);
 
