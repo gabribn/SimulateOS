@@ -390,7 +390,8 @@ export class BlocksState {
 	private appendPageLocationEvent(
 		process: Process,
 		pageNumber: number,
-		location: 'physical' | 'swap'
+		location: 'physical' | 'swap',
+		blockIndices: number[]
 	): void {
 		if (!process.pageAllocationHistory) {
 			process.pageAllocationHistory = [];
@@ -398,7 +399,7 @@ export class BlocksState {
 		const h = process.pageAllocationHistory;
 		const nextSeq =
 			h.length === 0 ? 1 : Math.max(...h.map((e) => e.sequence)) + 1;
-		h.push({ sequence: nextSeq, pageNumber, location });
+		h.push({ sequence: nextSeq, pageNumber, location, blockIndices });
 	}
 
 	/** Logical page (same grouping as “Páginas e Blocos”, 5 blocos por página). */
@@ -420,11 +421,16 @@ export class BlocksState {
 		process: Process,
 		memoryBlocksRequired: number
 	): void {
+		const alloc = process.allocatedBlocks || [];
 		const numPages = Math.ceil(
 			memoryBlocksRequired / BlocksState.PAGING_BLOCKS_PER_PAGE
 		);
 		for (let p = 1; p <= numPages; p++) {
-			this.appendPageLocationEvent(process, p, 'physical');
+			const slice = alloc.slice(
+				(p - 1) * BlocksState.PAGING_BLOCKS_PER_PAGE,
+				p * BlocksState.PAGING_BLOCKS_PER_PAGE
+			);
+			this.appendPageLocationEvent(process, p, 'physical', slice);
 		}
 	}
 
@@ -446,7 +452,7 @@ export class BlocksState {
 				proc,
 				blockIndexToSwap
 			);
-			this.appendPageLocationEvent(proc, pageNum, 'swap');
+			this.appendPageLocationEvent(proc, pageNum, 'swap', [freeSwapIndex]);
 		}
 
 		swapBlocks[freeSwapIndex].process = blocks[blockIndexToSwap].process;
@@ -493,9 +499,14 @@ export class BlocksState {
 				victimProcess,
 				physIdx
 			);
-			this.appendPageLocationEvent(victimProcess, pageNum, 'swap');
-
 			const targetSwapIdx = freeSwapIndices[iteration];
+			this.appendPageLocationEvent(
+				victimProcess,
+				pageNum,
+				'swap',
+				[targetSwapIdx]
+			);
+
 			swapBlocks[targetSwapIdx].process = blocks[physIdx].process;
 			newSwapIndices.push(targetSwapIdx);
 			blocks[physIdx].process = null;
@@ -549,7 +560,9 @@ export class BlocksState {
 			targetProcess,
 			swapIndexToMove
 		);
-		this.appendPageLocationEvent(targetProcess, pageNum, 'physical');
+		this.appendPageLocationEvent(targetProcess, pageNum, 'physical', [
+			freePhysicalIndex,
+		]);
 
 		targetProcess.lastAccessed = performance.now();
 

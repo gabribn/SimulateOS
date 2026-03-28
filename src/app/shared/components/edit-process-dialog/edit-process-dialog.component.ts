@@ -20,6 +20,17 @@ export interface EditProcessDialogData {
 	focusPageNumber?: number;
 }
 
+/** Trecho contíguo no mesmo tipo de memória (vários eventos fundidos em uma cadeia ->). */
+export interface PageHistorySegmentView {
+	location: 'physical' | 'swap';
+	blockIndices: number[];
+}
+
+export interface PageHistoryPageView {
+	pageNumber: number;
+	segments: PageHistorySegmentView[];
+}
+
 @Component({
   selector: 'app-edit-process-dialog',
   templateUrl: './edit-process-dialog.component.html',
@@ -27,7 +38,6 @@ export interface EditProcessDialogData {
 })
 export class EditProcessDialogComponent implements OnInit {
   processForm: FormGroup;
-  blocksPerPage = 5; // Cada página contém 5 blocos
   isPagingMode = false; // Flag para determinar se o tipo de escalonamento é de paginação
   isEditable = false; // Flag para determinar se o processo é editável
 
@@ -90,24 +100,49 @@ export class EditProcessDialogComponent implements OnInit {
     return [...h].sort((a, b) => a.sequence - b.sequence);
   }
 
-  // Organiza os blocos em páginas se for escalonamento baseado em páginas
-  get pagesWithBlocks(): { pageNumber: number; blocks: number[] }[] {
-    if (!this.isPagingMode) {
+  /**
+   * Por página lógica: funde eventos consecutivos com o mesmo local (física/SWAP)
+   * numa única cadeia `a -> b -> c` (modelo do primeiro cartão verde).
+   */
+  get pagesWithConsolidatedHistory(): PageHistoryPageView[] {
+    const ordered = this.pageAllocationHistoryOrdered;
+    if (!ordered.length) {
       return [];
     }
 
-    const allocatedBlocks = this.data.process.allocatedBlocks || [];
-    const pages = [];
-
-    for (let i = 0; i < allocatedBlocks.length; i += this.blocksPerPage) {
-      const pageBlocks = allocatedBlocks.slice(i, i + this.blocksPerPage);
-      pages.push({
-        pageNumber: pages.length + 1,
-        blocks: pageBlocks,
-      });
+    const byPage = new Map<number, PageAllocationHistoryEntry[]>();
+    for (const ev of ordered) {
+      const list = byPage.get(ev.pageNumber) ?? [];
+      list.push(ev);
+      byPage.set(ev.pageNumber, list);
     }
 
-    return pages;
+    const pageNumbers = [...byPage.keys()].sort((a, b) => a - b);
+
+    return pageNumbers.map((pageNumber) => {
+      const events = byPage.get(pageNumber)!;
+      const segments: PageHistorySegmentView[] = [];
+
+      for (const ev of events) {
+        const parts = ev.blockIndices?.length ? [...ev.blockIndices] : [];
+        const last = segments[segments.length - 1];
+
+        if (last && last.location === ev.location) {
+          last.blockIndices.push(...parts);
+        } else {
+          segments.push({ location: ev.location, blockIndices: [...parts] });
+        }
+      }
+
+      return { pageNumber, segments };
+    });
+  }
+
+  formatSegmentChain(indices: number[]): string {
+    if (indices?.length) {
+      return indices.join(' -> ');
+    }
+    return '—';
   }
 
   get allocatedBlocks(): number[] {

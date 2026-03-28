@@ -6,6 +6,8 @@ export interface PageAllocationHistoryEntry {
 	sequence: number;
 	pageNumber: number;
 	location: 'physical' | 'swap';
+	/** Índices dos blocos na RAM ou no SWAP conforme o evento. */
+	blockIndices?: number[];
 }
 
 export interface Process {
