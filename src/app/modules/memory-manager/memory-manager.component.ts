@@ -170,6 +170,15 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		return !inRam && inSwap;
 	}
 
+	isProcessNotAllocated(process: Process): boolean {
+		const blocks = this.store.selectSnapshot(BlocksState.getBlocks);
+		const swapBlocks = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+		const pid = process.id;
+		const inRam = blocks.some((b) => b.process?.id === pid);
+		const inSwap = swapBlocks.some((b) => b.process?.id === pid);
+		return !inRam && !inSwap;
+	}
+
 	isContiguousScalingType(type: BlocksScalingTypesEnum | null): boolean {
 		return (
 			type === BlocksScalingTypesEnum.FirstFit ||

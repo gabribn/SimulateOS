@@ -106,19 +106,36 @@
 						<div
 							*ngFor="let pageNumber of getPageNumbers(process)"
 							class="memory-container"
-							[ngClass]="isProcessShowingSwap(process) ? 'swap' : 'fisica'"
+							[ngClass]="{
+								na: isProcessNotAllocated(process),
+								swap: isProcessShowingSwap(process),
+								fisica:
+									!isProcessShowingSwap(process) &&
+									!isProcessNotAllocated(process)
+							}"
 						>
 							<div
-							class="page-rectangle"
-							[ngStyle]="{ 'background-color': process.color }"
-							(click)="editProcess(process, pageNumber)"
+								class="page-rectangle"
+								[class.page-rectangle--na]="isProcessNotAllocated(process)"
+								[ngStyle]="
+									isProcessNotAllocated(process)
+										? {}
+										: { 'background-color': process.color }
+								"
+								(click)="editProcess(process, pageNumber)"
 							>
-							Processo: <br />{{ process.id }} <br />
-							Página: {{ pageNumber }}
+								Processo: <br />{{ process.id }} <br />
+								Página: {{ pageNumber }}
 							</div>
 
 							<div class="memory-type">
-							{{ isProcessShowingSwap(process) ? 'SWAP' : 'FÍSICA' }}
+								{{
+									isProcessNotAllocated(process)
+										? 'N/A'
+										: isProcessShowingSwap(process)
+											? 'SWAP'
+											: 'FÍSICA'
+								}}
 							</div>
 						</div>
 						</div>
