@@ -35,6 +35,40 @@ export const BLOCKS_STATE_INITIAL_STATE: BlocksStateModel = {
 export class BlocksState {
 	private static readonly PAGING_BLOCKS_PER_PAGE = 5;
 
+	private getCanonicalProcess(process: Process): Process {
+		try {
+			const snap = this.store.snapshot() as {
+				simulateOSProcesses?: { data: Process[] };
+			};
+			return (
+				snap.simulateOSProcesses?.data?.find((p) => p.id === process.id) ??
+				process
+			);
+		} catch {
+			return process;
+		}
+	}
+
+	private rebindProcessToCanonical(
+		blocks: Box[],
+		swapBlocks: Box[],
+		process: Process
+	): Process {
+		const canonical = this.getCanonicalProcess(process);
+		const id = canonical.id;
+		for (let i = 0; i < blocks.length; i++) {
+			if (blocks[i].process?.id === id) {
+				blocks[i].process = canonical;
+			}
+		}
+		for (let i = 0; i < swapBlocks.length; i++) {
+			if (swapBlocks[i].process?.id === id) {
+				swapBlocks[i].process = canonical;
+			}
+		}
+		return canonical;
+	}
+
 	constructor(private store: Store) {
 		this.loadStateFromLocalStorage();
 		window.addEventListener(
@@ -137,7 +171,7 @@ export class BlocksState {
 		const state = context.getState();
 		const blocks = state.blocks.map(b => ({ ...b }));
 		const swapBlocks = state.swapBlocks.map(b => ({ ...b }));
-		const process = action.process;
+		const process = this.rebindProcessToCanonical(blocks, swapBlocks, action.process);
 		let allocationOrderIds = [...state.allocationOrderIds];
 
 		const isAlreadyInPhysicalMemory = blocks.some(b => b.process?.id === process.id);
@@ -393,13 +427,17 @@ export class BlocksState {
 		location: 'physical' | 'swap',
 		blockIndices: number[]
 	): void {
-		if (!process.pageAllocationHistory) {
-			process.pageAllocationHistory = [];
+		const target = this.getCanonicalProcess(process);
+		if (!target.pageAllocationHistory) {
+			target.pageAllocationHistory = [];
 		}
-		const h = process.pageAllocationHistory;
+		const h = target.pageAllocationHistory;
 		const nextSeq =
 			h.length === 0 ? 1 : Math.max(...h.map((e) => e.sequence)) + 1;
 		h.push({ sequence: nextSeq, pageNumber, location, blockIndices });
+		if (target !== process) {
+			process.pageAllocationHistory = h;
+		}
 	}
 
 	/** Logical page (same grouping as “Páginas e Blocos”, 5 blocos por página). */
@@ -407,7 +445,8 @@ export class BlocksState {
 		process: Process,
 		ramOrSwapSlotIndex: number
 	): number {
-		const alloc = process.allocatedBlocks || [];
+		const canonical = this.getCanonicalProcess(process);
+		const alloc = canonical.allocatedBlocks || [];
 		const pos = alloc.indexOf(ramOrSwapSlotIndex);
 		if (pos < 0) {
 			return 1;
@@ -446,16 +485,18 @@ export class BlocksState {
 			return false;
 		}
 
-		const proc = blocks[blockIndexToSwap].process;
-		if (proc) {
-			const pageNum = this.pageNumberForAllocatedBlockIndex(
-				proc,
-				blockIndexToSwap
-			);
-			this.appendPageLocationEvent(proc, pageNum, 'swap', [freeSwapIndex]);
+		const raw = blocks[blockIndexToSwap].process;
+		if (!raw) {
+			return false;
 		}
+		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, raw);
+		const pageNum = this.pageNumberForAllocatedBlockIndex(
+			proc,
+			blockIndexToSwap
+		);
+		this.appendPageLocationEvent(proc, pageNum, 'swap', [freeSwapIndex]);
 
-		swapBlocks[freeSwapIndex].process = blocks[blockIndexToSwap].process;
+		swapBlocks[freeSwapIndex].process = proc;
 
 		if (swapBlocks[freeSwapIndex].process) {
 			swapBlocks[freeSwapIndex].process!.swap = true;
@@ -471,10 +512,15 @@ export class BlocksState {
     swapBlocks: Box[],
     blockIndexToSwap: number
 	): boolean {
-		const victimProcess = blocks[blockIndexToSwap].process;
-		if (!victimProcess){
+		const rawVictim = blocks[blockIndexToSwap].process;
+		if (!rawVictim){
 			return false;
-		} 
+		}
+		const victimProcess = this.rebindProcessToCanonical(
+			blocks,
+			swapBlocks,
+			rawVictim
+		);
 
 		const processId = victimProcess.id;
 
@@ -553,8 +599,14 @@ export class BlocksState {
 			}
 		}
 
-		const targetProcess = swapBlocks[swapIndexToMove].process;
-		if (!targetProcess) return false;
+		const rawTarget = swapBlocks[swapIndexToMove].process;
+		if (!rawTarget) return false;
+
+		const targetProcess = this.rebindProcessToCanonical(
+			blocks,
+			swapBlocks,
+			rawTarget
+		);
 
 		const pageNum = this.pageNumberForAllocatedBlockIndex(
 			targetProcess,
@@ -663,6 +715,8 @@ export class BlocksState {
 			return;
 		}
 
+		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
+
 		// Criar lista de blocos vazios
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
@@ -704,21 +758,21 @@ export class BlocksState {
 		// Alocar blocos não contiguamente para o processo
 		for (let i = 0; i < memoryBlocksRequired; i++) {
 			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { process, index: blockIndex }; // Aloca o bloco
+			blocks[blockIndex] = { process: proc, index: blockIndex }; // Aloca o bloco
 		}
 
 		// Guardar os índices dos blocos alocados para este processo
-		process.allocatedBlocks = blocks
-			.filter((block) => block.process?.id === process.id)
+		proc.allocatedBlocks = blocks
+			.filter((block) => block.process?.id === proc.id)
 			.map((block) => block.index);
 
-		allocationOrderIds.push(process.id);
+		allocationOrderIds.push(proc.id);
 
-		this.recordInitialPhysicalPages(process, memoryBlocksRequired);
+		this.recordInitialPhysicalPages(proc, memoryBlocksRequired);
 
 		// Atualizar o estado global com os novos blocos alocados
 		context.patchState({ blocks, swapBlocks, allocationOrderIds });
-		console.log(`Blocos alocados via FIFO com SWAP: ${process.allocatedBlocks}`);
+		console.log(`Blocos alocados via FIFO com SWAP: ${proc.allocatedBlocks}`);
 	}
 
 	private runLRU(
@@ -735,6 +789,8 @@ export class BlocksState {
 		if (!process || !memoryBlocksRequired) {
 			return;
 		}
+
+		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
 
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
@@ -790,20 +846,20 @@ export class BlocksState {
 
 		for (let i = 0; i < memoryBlocksRequired; i++) {
 			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { process, index: blockIndex };
+			blocks[blockIndex] = { process: proc, index: blockIndex };
 		}
 
-		process.allocatedBlocks = blocks
-			.filter((block) => block.process?.id === process.id)
+		proc.allocatedBlocks = blocks
+			.filter((block) => block.process?.id === proc.id)
 			.map((block) => block.index);
 
-		process.lastAccessed = performance.now();
-		allocationOrderIds.push(process.id);
+		proc.lastAccessed = performance.now();
+		allocationOrderIds.push(proc.id);
 
-		this.recordInitialPhysicalPages(process, memoryBlocksRequired);
+		this.recordInitialPhysicalPages(proc, memoryBlocksRequired);
 
 		context.patchState({ blocks, swapBlocks, allocationOrderIds });
-    	console.log(`Blocos alocados via LRU: ${process.allocatedBlocks}`);
+    	console.log(`Blocos alocados via LRU: ${proc.allocatedBlocks}`);
 	}
 
 	private runNRU(
@@ -820,6 +876,8 @@ export class BlocksState {
 			console.error('Processo ou quantidade de blocos necessários ausentes.');
 			return;
 		}
+
+		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
 
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
@@ -887,23 +945,23 @@ export class BlocksState {
 
 		emptyBlocks = emptyBlocks.sort(() => Math.random() - 0.5);
 
-		process.referenced = true;
+		proc.referenced = true;
 
 		let allocatedBlocks: number[] = [];
 		for (let i = 0; i < memoryBlocksRequired; i++) {
 			const { index: blockIndex } = emptyBlocks[i];
-			blocks[blockIndex] = { process, index: blockIndex };
+			blocks[blockIndex] = { process: proc, index: blockIndex };
 			allocatedBlocks.push(blockIndex);
 		}
 
-		process.allocatedBlocks = allocatedBlocks;
+		proc.allocatedBlocks = allocatedBlocks;
 
-		this.recordInitialPhysicalPages(process, memoryBlocksRequired);
+		this.recordInitialPhysicalPages(proc, memoryBlocksRequired);
 		
-		allocationOrderIds.push(process.id);
+		allocationOrderIds.push(proc.id);
 
 		context.patchState({ blocks, swapBlocks, allocationOrderIds });
-		console.log(`Processo ${process.id} alocado. Blocos: ${allocatedBlocks}`);
+		console.log(`Processo ${proc.id} alocado. Blocos: ${allocatedBlocks}`);
 	}
 
 

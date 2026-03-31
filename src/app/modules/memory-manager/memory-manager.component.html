@@ -106,7 +106,7 @@
 						<div
 							*ngFor="let pageNumber of getPageNumbers(process)"
 							class="memory-container"
-							[ngClass]="process.swap ? 'swap' : 'fisica'"
+							[ngClass]="isProcessShowingSwap(process) ? 'swap' : 'fisica'"
 						>
 							<div
 							class="page-rectangle"
@@ -118,7 +118,7 @@
 							</div>
 
 							<div class="memory-type">
-							{{ process.swap ? 'SWAP' : 'FÍSICA' }}
+							{{ isProcessShowingSwap(process) ? 'SWAP' : 'FÍSICA' }}
 							</div>
 						</div>
 						</div>

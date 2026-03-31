@@ -67,9 +67,8 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 						return true;
 					});
 
-				if (this.notFinishedProcesses.length !== updatedProcesses.length) {
-					this.notFinishedProcesses = updatedProcesses;
-				}
+
+				this.notFinishedProcesses = [...updatedProcesses];
 			});
 
 	}
@@ -163,7 +162,13 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		return Array.from({ length: totalPages }, (_, index) => index + 1);
 	}
 
-
+	isProcessShowingSwap(process: Process): boolean {
+		const blocks = this.store.selectSnapshot(BlocksState.getBlocks);
+		const swapBlocks = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+		const inRam = blocks.some((b) => b.process?.id === process.id);
+		const inSwap = swapBlocks.some((b) => b.process?.id === process.id);
+		return !inRam && inSwap;
+	}
 
 	isContiguousScalingType(type: BlocksScalingTypesEnum | null): boolean {
 		return (
