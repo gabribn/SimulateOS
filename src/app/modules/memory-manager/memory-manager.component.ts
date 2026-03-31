@@ -58,10 +58,15 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		this.notFinishedProcesses$
 			.pipe(takeUntil(this._notifier$))
 			.subscribe((processes: Process[]) => {
-        		// Filtra processos que ainda não estão "finished", mantendo a ordem original
-				const updatedProcesses = processes.filter(process => process.state !== 'finished');
-				
-        		// Atualiza a lista somente se houve alteração
+				const seen = new Set<string>();
+				const updatedProcesses = processes
+					.filter((process) => process.state !== 'finished')
+					.filter((process) => {
+						if (seen.has(process.id)) return false;
+						seen.add(process.id);
+						return true;
+					});
+
 				if (this.notFinishedProcesses.length !== updatedProcesses.length) {
 					this.notFinishedProcesses = updatedProcesses;
 				}
@@ -144,9 +149,17 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 
 	blocksPerPage = 5;
 
+	/**
+	 * Quantidade de páginas lógicas do processo (não usar allocatedBlocks.length —
+	 * ela pode inflar com swap/migrações e gerar cartões duplicados na tabela).
+	 */
 	getPageNumbers(process: Process): number[] {
-		const allocatedBlocks = process.allocatedBlocks || [];
-		const totalPages = Math.ceil(allocatedBlocks.length / this.blocksPerPage);
+		const totalPages = Math.ceil(
+			process.memoryBlocksRequired / this.blocksPerPage
+		);
+		if (totalPages < 1) {
+			return [];
+		}
 		return Array.from({ length: totalPages }, (_, index) => index + 1);
 	}
 
