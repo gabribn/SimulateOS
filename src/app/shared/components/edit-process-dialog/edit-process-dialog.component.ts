@@ -5,9 +5,31 @@ import { ScalingTypesEnum } from 'src/app/shared/constants/scaling-types.constan
 import { BlocksScalingTypesEnum } from 'src/app/shared/constants/blocks-types.contants';
 import { ProcessColors } from 'src/app/shared/constants/process-colors.constants';
 import { ProcessTypes, ProcessTypesNames } from 'src/app/shared/constants/process-types.constants';
-import { Process } from 'src/app/shared/models/process';
+import {
+	PageAllocationHistoryEntry,
+	Process,
+} from 'src/app/shared/models/process';
 import { BlocksAction } from 'src/app/shared/stores/blocks/blocks.action';
+import { BlocksState } from 'src/app/shared/stores/blocks/blocks.state';
+import { ProcessesState } from 'src/app/shared/stores/processes/processes.state';
 import { Store } from '@ngxs/store';
+
+export interface EditProcessDialogData {
+	process: Process;
+	blockScaling?: BlocksScalingTypesEnum;
+	focusPageNumber?: number;
+}
+
+/** Trecho contíguo no mesmo tipo de memória (vários eventos fundidos em uma cadeia ->). */
+export interface PageHistorySegmentView {
+	location: 'physical' | 'swap';
+	blockIndices: number[];
+}
+
+export interface PageHistoryPageView {
+	pageNumber: number;
+	segments: PageHistorySegmentView[];
+}
 
 @Component({
   selector: 'app-edit-process-dialog',
@@ -16,7 +38,6 @@ import { Store } from '@ngxs/store';
 })
 export class EditProcessDialogComponent implements OnInit {
   processForm: FormGroup;
-  blocksPerPage = 5; // Cada página contém 5 blocos
   isPagingMode = false; // Flag para determinar se o tipo de escalonamento é de paginação
   isEditable = false; // Flag para determinar se o processo é editável
 
@@ -38,7 +59,7 @@ export class EditProcessDialogComponent implements OnInit {
 
   constructor(
     public dialogRef: MatDialogRef<EditProcessDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: any, // Recebendo process e blockScaling
+    @Inject(MAT_DIALOG_DATA) public data: EditProcessDialogData,
     private readonly formBuilder: FormBuilder,
     private store: Store
   ) {
@@ -50,39 +71,78 @@ export class EditProcessDialogComponent implements OnInit {
       state: [data.process.state],
       type: [data.process.type],
       color: [data.process.color],
-      isAvailable: [data.process.isAvailable],
+      isAvailable: [data.process.isAvailable ?? true],
     });
   }
 
   ngOnInit(): void {
+    const blockScaling =
+      this.data.blockScaling ??
+      this.store.selectSnapshot(BlocksState.getBlockScaling);
+
     // Verifica se o escalonamento atual é baseado em páginas (FIFO, LRU, NRU)
     this.isPagingMode =
-      this.data.blockScaling === BlocksScalingTypesEnum.FIFO ||
-      this.data.blockScaling === BlocksScalingTypesEnum.LRU ||
-      this.data.blockScaling === BlocksScalingTypesEnum.NRU;
+      blockScaling === BlocksScalingTypesEnum.FIFO ||
+      blockScaling === BlocksScalingTypesEnum.LRU ||
+      blockScaling === BlocksScalingTypesEnum.NRU;
 
-    // Mantendo o uso de ScalingTypesEnum para definir se o processo é editável
-    this.isEditable = this.data.blockScaling === ScalingTypesEnum.CircularWithPriorities;
+    // Edição de prioridade só no escalonamento de CPU com prioridades (não confundir com memória)
+    this.isEditable =
+      this.store.selectSnapshot(ProcessesState.getCurrentScalingType) ===
+      ScalingTypesEnum.CircularWithPriorities;
   }
 
-  // Organiza os blocos em páginas se for escalonamento baseado em páginas
-  get pagesWithBlocks(): { pageNumber: number; blocks: number[] }[] {
-    if (!this.isPagingMode) {
+  get pageAllocationHistoryOrdered(): PageAllocationHistoryEntry[] {
+    const h = this.data.process.pageAllocationHistory;
+    if (!h?.length) {
+      return [];
+    }
+    return [...h].sort((a, b) => a.sequence - b.sequence);
+  }
+
+  /**
+   * Por página lógica: funde eventos consecutivos com o mesmo local (física/SWAP)
+   * numa única cadeia `a -> b -> c` (modelo do primeiro cartão verde).
+   */
+  get pagesWithConsolidatedHistory(): PageHistoryPageView[] {
+    const ordered = this.pageAllocationHistoryOrdered;
+    if (!ordered.length) {
       return [];
     }
 
-    const allocatedBlocks = this.data.process.allocatedBlocks || [];
-    const pages = [];
-
-    for (let i = 0; i < allocatedBlocks.length; i += this.blocksPerPage) {
-      const pageBlocks = allocatedBlocks.slice(i, i + this.blocksPerPage);
-      pages.push({
-        pageNumber: pages.length + 1,
-        blocks: pageBlocks,
-      });
+    const byPage = new Map<number, PageAllocationHistoryEntry[]>();
+    for (const ev of ordered) {
+      const list = byPage.get(ev.pageNumber) ?? [];
+      list.push(ev);
+      byPage.set(ev.pageNumber, list);
     }
 
-    return pages;
+    const pageNumbers = [...byPage.keys()].sort((a, b) => a - b);
+
+    return pageNumbers.map((pageNumber) => {
+      const events = byPage.get(pageNumber)!;
+      const segments: PageHistorySegmentView[] = [];
+
+      for (const ev of events) {
+        const parts = ev.blockIndices?.length ? [...ev.blockIndices] : [];
+        const last = segments[segments.length - 1];
+
+        if (last && last.location === ev.location) {
+          last.blockIndices.push(...parts);
+        } else {
+          segments.push({ location: ev.location, blockIndices: [...parts] });
+        }
+      }
+
+      return { pageNumber, segments };
+    });
+  }
+
+  formatSegmentChain(indices: number[]): string {
+    if (indices?.length) {
+      return indices.join(' -> ');
+    }
+    return '—';
   }
 
   get allocatedBlocks(): number[] {

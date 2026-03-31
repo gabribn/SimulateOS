@@ -1,6 +1,15 @@
 import { ProcessStatesType } from '../constants/process-states.constants';
 import { ProcessTypesType } from '../constants/process-types.constants';
 
+/** One placement of a logical page (FIFO/LRU/NRU), in simulation order. */
+export interface PageAllocationHistoryEntry {
+	sequence: number;
+	pageNumber: number;
+	location: 'physical' | 'swap';
+	/** Índices dos blocos na RAM ou no SWAP conforme o evento. */
+	blockIndices?: number[];
+}
+
 export interface Process {
 	id: string;
 	priority: number;
@@ -20,6 +29,9 @@ export interface Process {
 	swap?: boolean;
 	referenced?: boolean;
     modified?: boolean;
+	pageAllocationHistory?: PageAllocationHistoryEntry[];
+	/** Usado pelo diálogo de edição / localStorage; opcional no modelo. */
+	isAvailable?: boolean;
 }
 
 export interface CreateProcessDTO {

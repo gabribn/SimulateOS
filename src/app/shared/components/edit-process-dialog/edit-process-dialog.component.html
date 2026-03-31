@@ -59,13 +59,44 @@
     </div>
 
     <div class="row" *ngIf="isPagingMode">
-      <mat-form-field appearance="outline" class="col">
-        <mat-label>Páginas e Blocos Alocados</mat-label>
-        <div *ngFor="let page of pagesWithBlocks">
-          <h4>Página {{ page.pageNumber }}</h4>
-          <textarea matInput [value]="page.blocks.join(' -> ')" readonly></textarea>
+      <div class="col edit-process-dialog__historico">
+        <div class="edit-process-dialog__historico-title">Páginas e Blocos Alocados</div>
+        <p *ngIf="pagesWithConsolidatedHistory.length === 0" class="edit-process-dialog__historico-empty">
+          Nenhum movimento de página registrado ainda.
+        </p>
+        <div
+          class="edit-process-dialog__page-groups"
+          *ngIf="pagesWithConsolidatedHistory.length"
+        >
+          <div
+            *ngFor="let page of pagesWithConsolidatedHistory"
+            class="edit-process-dialog__page-group"
+            [class.edit-process-dialog__page-group--focus]="data.focusPageNumber === page.pageNumber"
+          >
+            <div class="edit-process-dialog__page-group-title">Página {{ page.pageNumber }}</div>
+            <ol class="edit-process-dialog__historico-list">
+              <li
+                *ngFor="let seg of page.segments"
+                class="edit-process-dialog__historico-item"
+                [ngClass]="{
+                  'edit-process-dialog__historico-item--physical': seg.location === 'physical',
+                  'edit-process-dialog__historico-item--swap': seg.location === 'swap'
+                }"
+              >
+                <div class="edit-process-dialog__historico-item-header">
+                  <span class="edit-process-dialog__historico-page-spacer"></span>
+                  <span class="edit-process-dialog__historico-badge">{{
+                    seg.location === 'physical' ? 'Memória física' : 'SWAP'
+                  }}</span>
+                </div>
+                <div class="edit-process-dialog__historico-positions">
+                  {{ formatSegmentChain(seg.blockIndices) }}
+                </div>
+              </li>
+            </ol>
+          </div>
         </div>
-      </mat-form-field>
+      </div>
     </div>
   </div>
 

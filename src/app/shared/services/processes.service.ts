@@ -74,6 +74,7 @@ export class ProcessesService {
 							(_, i) => i + 1
 						),
 					pages: process.pages,
+					pageAllocationHistory: [],
 				}).pipe(delay(50));
 			}),
 			toArray()
