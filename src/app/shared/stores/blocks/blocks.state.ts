@@ -69,6 +69,33 @@ export class BlocksState {
 		return canonical;
 	}
 
+	private maxLogicalPageCount(process: Process): number {
+		return Math.max(
+			1,
+			Math.ceil(
+				process.memoryBlocksRequired / BlocksState.PAGING_BLOCKS_PER_PAGE
+			)
+		);
+	}
+
+	private clampLogicalPageNumber(process: Process, page: number): number {
+		const max = this.maxLogicalPageCount(process);
+		return Math.min(Math.max(1, page), max);
+	}
+
+	private clearPageAllocationHistoryIfFirstPlacement(
+		proc: Process,
+		blocks: Box[],
+		swapBlocks: Box[]
+	): void {
+		const pid = proc.id;
+		const inRam = blocks.some((b) => b.process?.id === pid);
+		const inSwap = swapBlocks.some((b) => b.process?.id === pid);
+		if (!inRam && !inSwap) {
+			proc.pageAllocationHistory = [];
+		}
+	}
+
 	constructor(private store: Store) {
 		this.loadStateFromLocalStorage();
 		window.addEventListener(
@@ -428,13 +455,14 @@ export class BlocksState {
 		blockIndices: number[]
 	): void {
 		const target = this.getCanonicalProcess(process);
+		const page = this.clampLogicalPageNumber(target, pageNumber);
 		if (!target.pageAllocationHistory) {
 			target.pageAllocationHistory = [];
 		}
 		const h = target.pageAllocationHistory;
 		const nextSeq =
 			h.length === 0 ? 1 : Math.max(...h.map((e) => e.sequence)) + 1;
-		h.push({ sequence: nextSeq, pageNumber, location, blockIndices });
+		h.push({ sequence: nextSeq, pageNumber: page, location, blockIndices });
 		if (target !== process) {
 			process.pageAllocationHistory = h;
 		}
@@ -449,11 +477,11 @@ export class BlocksState {
 		const alloc = canonical.allocatedBlocks || [];
 		const pos = alloc.indexOf(ramOrSwapSlotIndex);
 		if (pos < 0) {
-			return 1;
+			return this.clampLogicalPageNumber(canonical, 1);
 		}
-		return (
-			Math.floor(pos / BlocksState.PAGING_BLOCKS_PER_PAGE) + 1
-		);
+		const raw =
+			Math.floor(pos / BlocksState.PAGING_BLOCKS_PER_PAGE) + 1;
+		return this.clampLogicalPageNumber(canonical, raw);
 	}
 
 	private recordInitialPhysicalPages(
@@ -716,6 +744,7 @@ export class BlocksState {
 		}
 
 		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
+		this.clearPageAllocationHistoryIfFirstPlacement(proc, blocks, swapBlocks);
 
 		// Criar lista de blocos vazios
 		let emptyBlocks = blocks
@@ -791,6 +820,7 @@ export class BlocksState {
 		}
 
 		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
+		this.clearPageAllocationHistoryIfFirstPlacement(proc, blocks, swapBlocks);
 
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
@@ -878,6 +908,7 @@ export class BlocksState {
 		}
 
 		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
+		this.clearPageAllocationHistoryIfFirstPlacement(proc, blocks, swapBlocks);
 
 		let emptyBlocks = blocks
 			.map((block, index) => ({ block, index }))
