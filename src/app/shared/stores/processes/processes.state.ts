@@ -11,12 +11,16 @@ import { ProcessesService } from '../../services/processes.service';
 import { Logs } from '../logs/logs.actions';
 import { Processes } from './processes.actions';
 import { BlocksAction } from '../blocks/blocks.action';
+import { BlocksScalingTypesEnum } from '../../constants/blocks-types.contants';
+import { BlocksState } from '../blocks/blocks.state';
 
+const NRU_CLOCK_INTERRUPT_INTERVAL_SEC = 15;
 
 export interface ProcessesStateModel {
 	data: Process[];
 	colors: Color[];
 	timer: number;
+	nruLastInterruptSeconds: number;
 	ioWaitTime: number;
 	timeSlice: number;
 	scalingType: ScalingTypesEnum;
@@ -27,6 +31,7 @@ export const PROCESSES_STATE_INITIAL_STATE: ProcessesStateModel = {
 	data: [],
 	colors: [],
 	timer: 0,
+	nruLastInterruptSeconds: 0,
 	ioWaitTime: 1,
 	timeSlice: 2,
 	scalingType: ScalingTypesEnum.Circular,
@@ -412,15 +417,35 @@ export class ProcessesState {
 
 @Action(Processes.IncrementTimer)
 incrementTimer(context: StateContext<ProcessesStateModel>) {
-    const highResolutionTime = performance.now(); 
+		const highResolutionTime = performance.now();
+		const seconds = highResolutionTime / 1000;
+		const stateBefore = context.getState();
 
-    context.patchState({
-        timer: highResolutionTime, 
-    });
+		let nruLast = stateBefore.nruLastInterruptSeconds ?? 0;
+		if (seconds < nruLast) {
+			nruLast = 0;
+		}
 
-    this.runCPU(context);
-    this.runIO(context);
-}
+		const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
+		const patch: Partial<ProcessesStateModel> = { timer: highResolutionTime };
+
+		if (
+			blockScaling === BlocksScalingTypesEnum.NRU &&
+			seconds - nruLast >= NRU_CLOCK_INTERRUPT_INTERVAL_SEC
+		) {
+			context.dispatch(new BlocksAction.ClearReferenceBits());
+			patch.nruLastInterruptSeconds = seconds;
+			console.log(
+				`[Clock Interrupt] Relógio bateu ${seconds.toFixed(2)}s. Bits do NRU zerados.`
+			);
+		}
+
+		context.patchState(patch);
+
+		this.runCPU(context);
+		this.runIO(context);
+		this.saveStateToLocalStorage(context.getState());
+	}
 
 	private runCircularProcess(
 		currentExecutingProcess: Process,
@@ -833,6 +858,7 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 			ioWaitTime: 1,
 			timeSlice: 2,
 			timer: 0,
+			nruLastInterruptSeconds: 0,
 		});
 
 		context.dispatch([new Logs.ClearLogs(), new BlocksAction.ResetState()]);
