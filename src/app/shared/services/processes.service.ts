@@ -67,12 +67,7 @@ export class ProcessesService {
 					executingTime: 0,
 					currentType: this.getProcessType(process.type),
 					memoryBlocksRequired: process.memoryBlocksRequired,
-					allocatedBlocks:
-						process.allocatedBlocks ??
-						Array.from(
-							{ length: process.memoryBlocksRequired },
-							(_, i) => i + 1
-						),
+					allocatedBlocks: process.allocatedBlocks ?? [],
 					pages: process.pages,
 					pageAllocationHistory: [],
 				}).pipe(delay(50));

@@ -252,10 +252,6 @@ export class ProcessesState {
 							data: [...state.data, ...res],
 							colors: ProcessColors,
 						});
-
-						const teste = res.map((process)=> new BlocksAction.AllocateBlocks({process: process, memoryBlocksRequired: process.memoryBlocksRequired}))
-
-						context.dispatch(teste);
 					})
 				);
 		} else {
@@ -275,9 +271,6 @@ export class ProcessesState {
 							data: [...state.data],
 							colors: ProcessColors,
 						});
-						const teste = res.map((process)=> new BlocksAction.AllocateBlocks({process: process, memoryBlocksRequired: process.memoryBlocksRequired}))
-
-						context.dispatch(teste);
 					})
 				);
 		}
@@ -352,10 +345,6 @@ export class ProcessesState {
 
 		const updatedProcess: Process = { ...action.process, state: action.state };
 
-		if (action.state === ProcessStates.execution) {
-			context.dispatch(new BlocksAction.BringToPhysicalMemory(updatedProcess));
-		}
-
 		if (
 			updatedProcess.type === ProcessTypes.cpuAndIoBound &&
 			updatedProcess.state === ProcessStates.ready
@@ -366,6 +355,26 @@ export class ProcessesState {
 		}
 
 		data[index] = updatedProcess;
+
+		if (action.state === ProcessStates.execution) {
+			context.patchState({ data: [...data] });
+
+			const blocksSnap = this.store.selectSnapshot(BlocksState.getBlocks);
+			const swapSnap = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+			const pid = updatedProcess.id;
+			const inRam = blocksSnap.some((b) => b.process?.id === pid);
+			const inSwap = swapSnap.some((b) => b.process?.id === pid);
+
+			if (!inRam && !inSwap) {
+				context.dispatch(
+					new BlocksAction.AllocateBlocks({
+						process: updatedProcess,
+						memoryBlocksRequired: updatedProcess.memoryBlocksRequired,
+					})
+				);
+			}
+			context.dispatch(new BlocksAction.BringToPhysicalMemory(updatedProcess));
+		}
 
 		if (action.process.currentType === ProcessTypes.cpuBound) {
 			context.dispatch(
