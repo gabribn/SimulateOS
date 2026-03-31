@@ -38,7 +38,6 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		Process[]
 	>;
 	private _notifier$ = new Subject<void>();
-	private lastNruClearTime = 0;
 
 	timerInSeconds$!: Observable<number>;
 
@@ -59,37 +58,19 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 		this.notFinishedProcesses$
 			.pipe(takeUntil(this._notifier$))
 			.subscribe((processes: Process[]) => {
-        		// Filtra processos que ainda não estão "finished", mantendo a ordem original
-				const updatedProcesses = processes.filter(process => process.state !== 'finished');
-				
-        		// Atualiza a lista somente se houve alteração
-				if (this.notFinishedProcesses.length !== updatedProcesses.length) {
-					this.notFinishedProcesses = updatedProcesses;
-				}
+				const seen = new Set<string>();
+				const updatedProcesses = processes
+					.filter((process) => process.state !== 'finished')
+					.filter((process) => {
+						if (seen.has(process.id)) return false;
+						seen.add(process.id);
+						return true;
+					});
+
+
+				this.notFinishedProcesses = [...updatedProcesses];
 			});
 
-        this.timerInSeconds$
-            .pipe(takeUntil(this._notifier$))
-            .subscribe((seconds: number) => {
-                
-                const CLOCK_INTERRUPT_INTERVAL = 15; 
-
-                if (seconds < this.lastNruClearTime) {
-                    this.lastNruClearTime = 0;
-                }
-
-                if (seconds - this.lastNruClearTime >= CLOCK_INTERRUPT_INTERVAL) {
-                    
-                    this.lastNruClearTime = seconds;
-
-                    const currentAlgorithm = this.store.selectSnapshot(BlocksState.getBlockScaling);
-
-                    if (currentAlgorithm === BlocksScalingTypesEnum.NRU) {
-                        this.store.dispatch(new BlocksAction.ClearReferenceBits());
-                        console.log(`[Clock Interrupt] Relógio bateu ${seconds.toFixed(2)}s. Bits do NRU zerados.`);
-                    }
-                }
-            });
 	}
 
 	openBlockScalingTypeDialog(): void {
@@ -167,13 +148,36 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 
 	blocksPerPage = 5;
 
+	/**
+	 * Quantidade de páginas lógicas do processo (não usar allocatedBlocks.length —
+	 * ela pode inflar com swap/migrações e gerar cartões duplicados na tabela).
+	 */
 	getPageNumbers(process: Process): number[] {
-		const allocatedBlocks = process.allocatedBlocks || [];
-		const totalPages = Math.ceil(allocatedBlocks.length / this.blocksPerPage);
+		const totalPages = Math.ceil(
+			process.memoryBlocksRequired / this.blocksPerPage
+		);
+		if (totalPages < 1) {
+			return [];
+		}
 		return Array.from({ length: totalPages }, (_, index) => index + 1);
 	}
 
+	isProcessShowingSwap(process: Process): boolean {
+		const blocks = this.store.selectSnapshot(BlocksState.getBlocks);
+		const swapBlocks = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+		const inRam = blocks.some((b) => b.process?.id === process.id);
+		const inSwap = swapBlocks.some((b) => b.process?.id === process.id);
+		return !inRam && inSwap;
+	}
 
+	isProcessNotAllocated(process: Process): boolean {
+		const blocks = this.store.selectSnapshot(BlocksState.getBlocks);
+		const swapBlocks = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+		const pid = process.id;
+		const inRam = blocks.some((b) => b.process?.id === pid);
+		const inSwap = swapBlocks.some((b) => b.process?.id === pid);
+		return !inRam && !inSwap;
+	}
 
 	isContiguousScalingType(type: BlocksScalingTypesEnum | null): boolean {
 		return (
