@@ -145,7 +145,7 @@
 	</div>
 
 	<div
-		*ngIf="!isContiguousScalingType(blockScaling$ | async)"
+		*ngIf="(useSwap$ | async) && !isContiguousScalingType(blockScaling$ | async)"
 		class="memory-title"
 		style="margin-top: 20px;"
 	>
@@ -153,7 +153,7 @@
 	</div>
 	
 	<div 
-		*ngIf="!isContiguousScalingType(blockScaling$ | async)"
+		*ngIf="(useSwap$ | async) && !isContiguousScalingType(blockScaling$ | async)"
 		class="process-memory__wrapper-memory"
 	>
 		<div class="process-memory__containerBlocos reduced-width" style="border-color: #666; background-color: #f0f0f0;">

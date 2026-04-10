@@ -118,12 +118,14 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 
   createProcess() {
     const availableProcesses = this.availableProcesses?.length;
+    const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
 
     const dialogRef = this.dialog.open(CreateProcessDialogComponent, {
       width: '600px',
       disableClose: true,
       data: {
         availableProcesses,
+        blockScaling,
       },
     });
 

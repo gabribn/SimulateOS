@@ -34,6 +34,7 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 	availableProcesses: Process[] = [];
 	@Select(ProcessesState.getNotFinishedProcesses) notFinishedProcesses$!: Observable<Process[]>;
 	notFinishedProcesses: Process[] = [];
+	@Select(BlocksState.getUseSwap) useSwap$!: Observable<boolean>;
 	@Select(ProcessesState.getFinishedProcesses) finishedProcesses$!: Observable<
 		Process[]
 	>;
@@ -98,23 +99,26 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 			blockScaling === BlocksScalingTypesEnum.LRU ||
 			blockScaling === BlocksScalingTypesEnum.NRU;
 
-		const labels = {
-			memoryLabel: isPaging
-				? 'Quantidade de páginas'
-				: 'Quantidade de blocos de memória',
-			maxLabel: isPaging
-				? 'Máximo de páginas permitido'
-				: 'Máximo de blocos permitido',
-			maxAvailablePages: isPaging ? 24 : 120, // Definir máximo de páginas se for escalonamento baseado em páginas
-		};
+		const maxPagesPerProcessCap = this.store.selectSnapshot(
+			BlocksState.getMaxPagesPerProcessCap
+		);
+		const ramBlockCount = this.store.selectSnapshot(BlocksState.getBlocksLength);
 
 		const dialogRef = this.dialog.open(CreateProcessDialogComponent, {
 			width: '600px',
 			disableClose: true,
 			data: {
 				availableProcesses,
-				blockScaling, // Passa o escalonamento atual
-				labels, // Passa os labels dinâmicos e máximo de páginas
+				blockScaling,
+				labels: {
+					memoryLabel: isPaging
+						? 'Quantidade de páginas'
+						: 'Quantidade de blocos de memória',
+					maxLabel: isPaging
+						? 'Máximo de páginas permitido'
+						: 'Máximo de blocos permitido',
+					maxAvailablePages: isPaging ? maxPagesPerProcessCap : ramBlockCount,
+				},
 			},
 		});
 

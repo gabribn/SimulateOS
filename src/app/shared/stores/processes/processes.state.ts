@@ -436,10 +436,12 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 		}
 
 		const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
+		const useSwap = this.store.selectSnapshot(BlocksState.getUseSwap);
 		const patch: Partial<ProcessesStateModel> = { timer: highResolutionTime };
 
 		if (
 			blockScaling === BlocksScalingTypesEnum.NRU &&
+			useSwap &&
 			seconds - nruLast >= NRU_CLOCK_INTERRUPT_INTERVAL_SEC
 		) {
 			context.dispatch(new BlocksAction.ClearReferenceBits());

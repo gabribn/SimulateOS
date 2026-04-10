@@ -35,4 +35,9 @@ export namespace BlocksAction {
     static readonly type = '[Blocks] Clear Reference Bits';
   }
 
+	export class SetUseSwap {
+		static readonly type = '[Blocks] Set Use Swap';
+		constructor(public useSwap: boolean) {}
+	}
+
 }

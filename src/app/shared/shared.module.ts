@@ -13,10 +13,11 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 
 const modules = [IconComponent, ScalingTypeDescriptionPipe, HeaderComponent, BlockScalingTypeDescriptionPipe, CreateProcessDialogComponent, ColorPickerDialogComponent];
 @NgModule({
-	imports: [CommonModule, MatIconModule, MatFormFieldModule, ReactiveFormsModule, MatSelectModule, MatInputModule, MatButtonModule],
+	imports: [CommonModule, MatIconModule, MatFormFieldModule, ReactiveFormsModule, MatSelectModule, MatInputModule, MatButtonModule, MatSlideToggleModule],
 	declarations: [...modules],
 	exports: [...modules],
 })
