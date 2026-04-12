@@ -12,13 +12,16 @@ export interface MemoryHardwareProfile {
 	swapBlockCount: number;
 	/** Teto no diálogo de criação (modo FIFO/LRU/NRU), alinhado ao histórico do Git. */
 	maxPagesPerProcessCap: number;
+	/** Limite de processos ativos no simulador (com swap: menos processos). */
+	maxProcessesCap: number;
 }
 
 /** Primeiro commit: RAM 120, sem swap, teto 12 páginas. */
 export const MEMORY_HARDWARE_ABUNDANT: MemoryHardwareProfile = {
 	ramBlockCount: 120,
 	swapBlockCount: 0,
-	maxPagesPerProcessCap: 12,
+	maxPagesPerProcessCap: 5,
+	maxProcessesCap: 15,
 };
 
 /** Total de molduras RAM+swap (40) no modo com swap. */
@@ -31,7 +34,8 @@ export const MAX_RESIDENT_PAGES_IN_RAM_WITH_SWAP = 1;
 export const MEMORY_HARDWARE_SWAP_CONSTRAINED: MemoryHardwareProfile = {
 	ramBlockCount: 20,
 	swapBlockCount: 20,
-	maxPagesPerProcessCap: 24,
+	maxPagesPerProcessCap: 1,
+	maxProcessesCap: 8,
 };
 
 export function getMemoryHardwareProfile(useSwap: boolean): MemoryHardwareProfile {

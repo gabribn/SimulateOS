@@ -49,8 +49,8 @@ export class CreateProcessDialogComponent implements OnInit, OnDestroy {
   useSwap$!: Observable<boolean>;
 
   processForm: FormGroup;
-  maxProcesses = 15;
-  maxAvailableProcesses = this.maxProcesses;
+  maxProcessesCap!: number;
+  maxAvailableProcesses!: number;
   maxAvailableBlocks!: number;
   typeOptions = [
     {
@@ -86,8 +86,6 @@ export class CreateProcessDialogComponent implements OnInit, OnDestroy {
     private elementRef: ElementRef,
     private store: Store
   ) {
-    this.maxAvailableProcesses = this.maxProcesses - data.availableProcesses;
-
     this.isPagingMode =
       data.blockScaling === BlocksScalingTypesEnum.FIFO ||
       data.blockScaling === BlocksScalingTypesEnum.LRU ||
@@ -102,10 +100,7 @@ export class CreateProcessDialogComponent implements OnInit, OnDestroy {
       priority: [0, [Validators.min(0), Validators.max(15)]],
       type: [ProcessTypes.cpuBound],
       color: [ProcessColors.find((color) => color.isAvailable)?.color],
-      number: [
-        1,
-        [Validators.min(1), Validators.max(this.maxAvailableProcesses)],
-      ],
+      number: [1, [Validators.min(1), Validators.max(1)]],
       processTimeToFinish: [1, [Validators.required, Validators.min(1)]],
       memoryBlocksRequired: [
         5,
@@ -122,6 +117,8 @@ export class CreateProcessDialogComponent implements OnInit, OnDestroy {
         this.updateMemoryBlocks(pages);
       });
     }
+
+    this.refreshProcessCreationLimit();
   }
 
   ngOnInit(): void {
@@ -129,7 +126,10 @@ export class CreateProcessDialogComponent implements OnInit, OnDestroy {
 
     this.useSwap$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((v) => (this.useSwapEnabled = v));
+      .subscribe((v) => {
+        this.useSwapEnabled = v;
+        this.refreshProcessCreationLimit();
+      });
 
     this.currentScalingType$
       .pipe(takeUntil(this.destroy$))
@@ -150,6 +150,25 @@ export class CreateProcessDialogComponent implements OnInit, OnDestroy {
       return;
     }
     this.store.dispatch(new BlocksAction.SetUseSwap(enabled));
+  }
+
+  private refreshProcessCreationLimit(): void {
+    const useSwap = this.store.selectSnapshot(BlocksState.getUseSwap);
+    const profile = getMemoryHardwareProfile(useSwap);
+    this.maxProcessesCap = profile.maxProcessesCap;
+    const occupied = this.store.selectSnapshot(
+      ProcessesState.getNotFinishedProcesses
+    ).length;
+    this.maxAvailableProcesses = Math.max(
+      0,
+      this.maxProcessesCap - occupied
+    );
+
+    this.processForm.get('number')?.setValidators([
+      Validators.min(1),
+      Validators.max(this.maxAvailableProcesses),
+    ]);
+    this.processForm.get('number')?.updateValueAndValidity({ emitEvent: false });
   }
 
   private applyMemoryLimitValidators(freeBlocks: number): void {

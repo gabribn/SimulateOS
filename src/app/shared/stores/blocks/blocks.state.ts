@@ -239,6 +239,11 @@ export class BlocksState {
 			: MEMORY_HARDWARE_ABUNDANT.maxPagesPerProcessCap;
 	}
 
+	@Selector()
+	static getMaxProcessesCap(state: BlocksStateModel): number {
+		return getMemoryHardwareProfile(state.useSwap).maxProcessesCap;
+	}
+
 	@Action(BlocksAction.AllocateBlocks)
 	allocateBlocks(
 		context: StateContext<BlocksStateModel>,

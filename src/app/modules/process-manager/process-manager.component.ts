@@ -59,7 +59,6 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
   availableProcesses: Process[] = [];
   executingProcesses: Process[] = [];
   ioProcess?: Process;
-  maxProcesses = 15;
   ioColumns: Array<string> = [];
   sequences: Sequence[] = [];
   boxWidth: number = 0;
@@ -170,9 +169,8 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 		}
 
   canCreateProcess() {
-    if (this.maxProcesses - this.availableProcesses.length > 0) return true;
-
-    return false;
+    const cap = this.store.selectSnapshot(BlocksState.getMaxProcessesCap);
+    return cap - this.availableProcesses.length > 0;
   }
 
   handleOpenProcessLifetimeDialog(): void {
