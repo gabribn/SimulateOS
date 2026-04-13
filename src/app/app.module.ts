@@ -22,7 +22,7 @@ import { BlocksState } from './shared/stores/blocks/blocks.state';
 		HttpClientModule,
 		MatNativeDateModule,
 		NgxsStoragePluginModule.forRoot({
-			key: [ProcessesState, LogsState, BlocksState],
+			key: [ProcessesState, LogsState],
 		}),
 		NgxsModule.forRoot([ProcessesState, LogsState, BlocksState]),
 		// O modulo abaixo gera os logs via console

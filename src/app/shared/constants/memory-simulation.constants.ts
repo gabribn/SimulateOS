@@ -24,19 +24,21 @@ export const MEMORY_HARDWARE_ABUNDANT: MemoryHardwareProfile = {
 	maxProcessesCap: 15,
 };
 
-/** Total de molduras RAM+swap (40) no modo com swap. */
-export const TOTAL_FRAMES_PHYSICAL_PLUS_SWAP = 40;
-
 /** Máximo de páginas residentes na RAM por processo com swap ligado (1 página = 5 blocos). */
 export const MAX_RESIDENT_PAGES_IN_RAM_WITH_SWAP = 1;
 
-/** Cenário restritivo: RAM 20 + swap 20 = 40 molduras; substituição de páginas ativa. */
+/** Cenário restritivo: RAM pequena + swap; substituição de páginas ativa. */
 export const MEMORY_HARDWARE_SWAP_CONSTRAINED: MemoryHardwareProfile = {
 	ramBlockCount: 20,
-	swapBlockCount: 20,
+	swapBlockCount: 25,
 	maxPagesPerProcessCap: 1,
 	maxProcessesCap: 8,
 };
+
+/** Total de molduras RAM+swap no modo com swap (derivado do perfil — única fonte para UI e validações). */
+export const TOTAL_FRAMES_PHYSICAL_PLUS_SWAP =
+	MEMORY_HARDWARE_SWAP_CONSTRAINED.ramBlockCount +
+	MEMORY_HARDWARE_SWAP_CONSTRAINED.swapBlockCount;
 
 export function getMemoryHardwareProfile(useSwap: boolean): MemoryHardwareProfile {
 	return useSwap ? MEMORY_HARDWARE_SWAP_CONSTRAINED : MEMORY_HARDWARE_ABUNDANT;

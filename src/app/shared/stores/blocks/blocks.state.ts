@@ -265,7 +265,7 @@ export class BlocksState {
 		if (state.useSwap) {
 			if (totalFree < memoryBlocksRequired) {
 				console.log(
-					'Memória insuficiente: não há molduras livres na RAM+swap (40 no total).'
+					`Memória insuficiente: não há molduras livres na RAM+swap (${TOTAL_FRAMES_PHYSICAL_PLUS_SWAP} no total).`
 				);
 				return;
 			}
