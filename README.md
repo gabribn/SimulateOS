@@ -2,6 +2,12 @@
 
 Este é um projeto de simulação de conceitos de Sistema Operacional desenvolvido com Angular.
 
+## Wiki e documentação técnica
+
+Há documentação sobre **fluxos de memória (com swap e sem swap)**, peculiaridades do simulador e **principais ações/funções** (NGXS, `BlocksState`, etc.):
+
+- **Wiki no GitHub:** [https://github.com/gabribn/SimulateOS/wiki](https://github.com/gabribn/SimulateOS/wiki)
+
 ## 🚀 Como Rodar a Aplicação
 
 Siga os passos abaixo para configurar e executar a aplicação em seu ambiente local.
