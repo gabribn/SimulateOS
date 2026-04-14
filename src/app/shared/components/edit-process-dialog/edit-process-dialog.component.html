@@ -79,19 +79,35 @@
                 *ngFor="let seg of page.segments"
                 class="edit-process-dialog__historico-item"
                 [ngClass]="{
-                  'edit-process-dialog__historico-item--physical': seg.location === 'physical',
-                  'edit-process-dialog__historico-item--swap': seg.location === 'swap'
+                  'edit-process-dialog__historico-item--physical':
+                    seg.kind === 'placement' && seg.location === 'physical',
+                  'edit-process-dialog__historico-item--swap':
+                    seg.kind === 'placement' && seg.location === 'swap',
+                  'edit-process-dialog__historico-item--notice': seg.kind === 'notice'
                 }"
               >
-                <div class="edit-process-dialog__historico-item-header">
-                  <span class="edit-process-dialog__historico-page-spacer"></span>
-                  <span class="edit-process-dialog__historico-badge">{{
-                    seg.location === 'physical' ? 'Memória física' : 'SWAP'
-                  }}</span>
-                </div>
-                <div class="edit-process-dialog__historico-positions">
-                  {{ formatSegmentChain(seg.blockIndices) }}
-                </div>
+                <ng-container *ngIf="seg.kind === 'notice'">
+                  <div class="edit-process-dialog__historico-item-header">
+                    <span class="edit-process-dialog__historico-page-spacer"></span>
+                    <span class="edit-process-dialog__historico-badge edit-process-dialog__historico-badge--notice"
+                      >Evento</span
+                    >
+                  </div>
+                  <div class="edit-process-dialog__historico-positions">
+                    {{ seg.message }}
+                  </div>
+                </ng-container>
+                <ng-container *ngIf="seg.kind === 'placement'">
+                  <div class="edit-process-dialog__historico-item-header">
+                    <span class="edit-process-dialog__historico-page-spacer"></span>
+                    <span class="edit-process-dialog__historico-badge">{{
+                      seg.location === 'physical' ? 'Memória física' : 'SWAP'
+                    }}</span>
+                  </div>
+                  <div class="edit-process-dialog__historico-positions">
+                    {{ formatSegmentChain(seg.blockIndices) }}
+                  </div>
+                </ng-container>
               </li>
             </ol>
           </div>

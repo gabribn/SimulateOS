@@ -146,6 +146,66 @@ app-header {
 
 	&__wrapper-memory{
 		display: flex;
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 20px;
+	}
+
+	&__paging-columns {
+		display: flex;
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 24px;
+		width: 100%;
+		margin-top: 8px;
+
+		.memory-title--in-column h2 {
+			margin: 0;
+		}
+	}
+
+	&__memories-column {
+		flex: 1 1 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	&__memories-column &__containerBlocos--flat {
+		margin-top: 8px;
+	}
+
+	/** Espaço entre a caixa da RAM e o título do swap (só a moldura física, não a área de swap). */
+	&__memories-column &__containerBlocos--flat:not(.process-memory__containerBlocos--swap-area) {
+		margin-bottom: 16px;
+	}
+
+	&__containerBlocos--swap-area {
+		border-color: #666;
+		background-color: #f0f0f0;
+	}
+
+	.memory-title--after-ram {
+		margin-top: 12px;
+	}
+
+	@media (max-width: 960px) {
+		&__paging-columns {
+			flex-direction: column;
+		}
+
+		&__memories-column {
+			flex: none;
+			width: 100%;
+			max-width: none;
+		}
+
+		&__table-page--right {
+			flex: none;
+			width: 100%;
+			max-width: none;
+		}
 	}
 
 	&__containerBlocos {
@@ -161,6 +221,13 @@ app-header {
     min-width: 655px;
     box-sizing: border-box;
   }
+
+	&__containerBlocos--flat {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		margin-top: 12px;
+	}
 
 	.reduced-width {
     width: 60%; /* largura reduzida */
@@ -196,6 +263,11 @@ app-header {
 		margin-bottom: -25px;
 	}
 
+	.memory-title.memory-title--in-column {
+		margin-top: 0;
+		margin-bottom: 0;
+	}
+
   &__sequences-info{
     margin-left: 20px;
     margin-top: 30px;
@@ -211,6 +283,24 @@ app-header {
 		width: 40%;
 		max-width: 40%;
 		overflow: hidden;
+
+		&--right {
+			margin-left: 0;
+			margin-top: 0;
+			flex: 1 1 0;
+			min-width: 0;
+			width: auto;
+			max-width: none;
+			overflow: visible;
+
+			> h2 {
+				margin: 0;
+			}
+
+			.process-memory__wrapper-pages {
+				margin-top: 8px;
+			}
+		}
 	}
 
 	&__wrapper-pages{

@@ -7,11 +7,25 @@
     <h1 mat-dialog-title>Criação de processo</h1>
 
     <h3 style="text-decoration: underline">
-      Máx Processos Permitido: <b>{{ maxAvailableProcesses }}</b>
+      Máx Processos Permitido: <b>{{ maxProcessesCap }}</b>
     </h3>
   </div>
 
   <div mat-dialog-content>
+    <div class="create-process-dialog__swap-row">
+      <mat-slide-toggle
+        [checked]="useSwapEnabled"
+        (change)="onUseSwapChange($event.checked)"
+        color="primary"
+      >
+        Simular com swap (RAM e substituição de páginas)
+      </mat-slide-toggle>
+      <p class="create-process-dialog__swap-hint">
+        Desligado: RAM amplia (120 blocos)
+        Ao mudar esta opção, processos e memória são reiniciados.
+      </p>
+    </div>
+
     <div class="row">
       <mat-form-field appearance="outline" class="col">
         <mat-label>Cor do processo</mat-label>

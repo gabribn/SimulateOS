@@ -59,7 +59,6 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
   availableProcesses: Process[] = [];
   executingProcesses: Process[] = [];
   ioProcess?: Process;
-  maxProcesses = 15;
   ioColumns: Array<string> = [];
   sequences: Sequence[] = [];
   boxWidth: number = 0;
@@ -118,12 +117,14 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 
   createProcess() {
     const availableProcesses = this.availableProcesses?.length;
+    const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
 
     const dialogRef = this.dialog.open(CreateProcessDialogComponent, {
       width: '600px',
       disableClose: true,
       data: {
         availableProcesses,
+        blockScaling,
       },
     });
 
@@ -147,7 +148,10 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 		const dialogRef = this.dialog.open(EditProcessDialogComponent, {
 			width: '600px',
 			disableClose: true,
-			data: { process },
+			data: {
+				process,
+				useSwap: this.store.selectSnapshot(BlocksState.getUseSwap),
+			},
 		});
 
 		dialogRef.afterClosed().subscribe((res?: CreateProcessDTO) => {
@@ -168,9 +172,8 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 		}
 
   canCreateProcess() {
-    if (this.maxProcesses - this.availableProcesses.length > 0) return true;
-
-    return false;
+    const cap = this.store.selectSnapshot(BlocksState.getMaxProcessesCap);
+    return cap - this.availableProcesses.length > 0;
   }
 
   handleOpenProcessLifetimeDialog(): void {

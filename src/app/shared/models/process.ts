@@ -5,9 +5,10 @@ import { ProcessTypesType } from '../constants/process-types.constants';
 export interface PageAllocationHistoryEntry {
 	sequence: number;
 	pageNumber: number;
-	location: 'physical' | 'swap';
+	location?: 'physical' | 'swap';
 	/** Índices dos blocos na RAM ou no SWAP conforme o evento. */
 	blockIndices?: number[];
+	detailMessage?: string;
 }
 
 export interface Process {

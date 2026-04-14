@@ -18,13 +18,17 @@ export interface EditProcessDialogData {
 	process: Process;
 	blockScaling?: BlocksScalingTypesEnum;
 	focusPageNumber?: number;
+	useSwap?: boolean;
 }
 
-/** Trecho contíguo no mesmo tipo de memória (vários eventos fundidos em uma cadeia ->). */
-export interface PageHistorySegmentView {
-	location: 'physical' | 'swap';
-	blockIndices: number[];
-}
+/** Um passo no histórico da página (sem fundir colocações consecutivas). */
+export type PageHistorySegmentView =
+	| { kind: 'notice'; message: string }
+	| {
+			kind: 'placement';
+			location: 'physical' | 'swap';
+			blockIndices: number[];
+	  };
 
 export interface PageHistoryPageView {
 	pageNumber: number;
@@ -100,11 +104,19 @@ export class EditProcessDialogComponent implements OnInit {
     return [...h].sort((a, b) => a.sequence - b.sequence);
   }
 
-  /**
-   * Por página lógica: funde eventos consecutivos com o mesmo local (física/SWAP)
-   * numa única cadeia `a -> b -> c` (modelo do primeiro cartão verde).
-   */
+  private get memoryUsesSwap(): boolean {
+    return (
+      this.data.useSwap ?? this.store.selectSnapshot(BlocksState.getUseSwap)
+    );
+  }
+
   get pagesWithConsolidatedHistory(): PageHistoryPageView[] {
+    return this.memoryUsesSwap
+      ? this.buildHistoryMergedByLocation()
+      : this.buildHistoryPerEvent();
+  }
+
+  private buildHistoryMergedByLocation(): PageHistoryPageView[] {
     const ordered = this.pageAllocationHistoryOrdered;
     if (!ordered.length) {
       return [];
@@ -124,15 +136,58 @@ export class EditProcessDialogComponent implements OnInit {
       const segments: PageHistorySegmentView[] = [];
 
       for (const ev of events) {
+        if (ev.location !== 'physical' && ev.location !== 'swap') {
+          continue;
+        }
         const parts = ev.blockIndices?.length ? [...ev.blockIndices] : [];
         const last = segments[segments.length - 1];
 
-        if (last && last.location === ev.location) {
+        if (
+          last &&
+          last.kind === 'placement' &&
+          last.location === ev.location
+        ) {
           last.blockIndices.push(...parts);
         } else {
-          segments.push({ location: ev.location, blockIndices: [...parts] });
+          segments.push({
+            kind: 'placement' as const,
+            location: ev.location,
+            blockIndices: [...parts],
+          });
         }
       }
+
+      return { pageNumber, segments };
+    });
+  }
+
+  private buildHistoryPerEvent(): PageHistoryPageView[] {
+    const ordered = this.pageAllocationHistoryOrdered;
+    if (!ordered.length) {
+      return [];
+    }
+
+    const byPage = new Map<number, PageAllocationHistoryEntry[]>();
+    for (const ev of ordered) {
+      const list = byPage.get(ev.pageNumber) ?? [];
+      list.push(ev);
+      byPage.set(ev.pageNumber, list);
+    }
+
+    const pageNumbers = [...byPage.keys()].sort((a, b) => a - b);
+
+    return pageNumbers.map((pageNumber) => {
+      const events = byPage.get(pageNumber)!;
+      const segments: PageHistorySegmentView[] = events.map((ev) => {
+        if (ev.detailMessage && !ev.location) {
+          return { kind: 'notice' as const, message: ev.detailMessage };
+        }
+        return {
+          kind: 'placement' as const,
+          location: ev.location ?? 'physical',
+          blockIndices: [...(ev.blockIndices ?? [])],
+        };
+      });
 
       return { pageNumber, segments };
     });
