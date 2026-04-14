@@ -2,7 +2,7 @@ import { State, Action, StateContext, Selector, Store } from '@ngxs/store';
 import { Injectable } from '@angular/core';
 import { Box } from '../../models/box';
 import { BlocksAction } from './blocks.action';
-import { Process } from '../../models/process';
+import { PageAllocationHistoryEntry, Process } from '../../models/process';
 import { BlocksScalingTypesEnum } from '../../constants/blocks-types.contants';
 import {
 	createEmptyBoxArray,
@@ -120,8 +120,12 @@ export class BlocksState {
 	private clearPageAllocationHistoryIfFirstPlacement(
 		proc: Process,
 		blocks: Box[],
-		swapBlocks: Box[]
+		swapBlocks: Box[],
+		useSwap: boolean
 	): void {
+		if (!useSwap) {
+			return;
+		}
 		const pid = proc.id;
 		const inRam = blocks.some((b) => b.process?.id === pid);
 		const inSwap = swapBlocks.some((b) => b.process?.id === pid);
@@ -574,6 +578,66 @@ export class BlocksState {
 		context.patchState({ blocks });
 	}
 
+	private nextHistorySequence(h: PageAllocationHistoryEntry[]): number {
+		return h.length === 0 ? 1 : Math.max(...h.map((e) => e.sequence)) + 1;
+	}
+
+	private appendPageHistoryNotice(
+		process: Process,
+		pageNumber: number,
+		detailMessage: string
+	): void {
+		const target = this.getCanonicalProcess(process);
+		const page = this.clampLogicalPageNumber(target, pageNumber);
+		if (!target.pageAllocationHistory) {
+			target.pageAllocationHistory = [];
+		}
+		const h = target.pageAllocationHistory;
+		h.push({
+			sequence: this.nextHistorySequence(h),
+			pageNumber: page,
+			detailMessage,
+		});
+		if (target !== process) {
+			process.pageAllocationHistory = h;
+		}
+	}
+
+	private appendRemovalNoticesBeforeFullRamEvict(
+		blocks: Box[],
+		swapBlocks: Box[],
+		victimId: string
+	): void {
+		let sample: Process | null = null;
+		for (let i = 0; i < blocks.length; i++) {
+			if (blocks[i].process?.id === victimId) {
+				sample = blocks[i].process!;
+				break;
+			}
+		}
+		if (!sample) {
+			return;
+		}
+		const canon = this.rebindProcessToCanonical(blocks, swapBlocks, sample);
+		const alloc = canon.allocatedBlocks || [];
+		const pages = new Set<number>();
+		for (let pos = 0; pos < alloc.length; pos++) {
+			const enc = alloc[pos];
+			if (this.isSwapAllocEntry(enc)) {
+				continue;
+			}
+			const rawPage = Math.floor(pos / BlocksState.PAGING_BLOCKS_PER_PAGE) + 1;
+			pages.add(this.clampLogicalPageNumber(canon, rawPage));
+		}
+		pages.forEach((pn) =>
+			this.appendPageHistoryNotice(
+				canon,
+				pn,
+				'Processo removido da memória física'
+			)
+		);
+	}
+
 	private appendPageLocationEvent(
 		process: Process,
 		pageNumber: number,
@@ -586,9 +650,12 @@ export class BlocksState {
 			target.pageAllocationHistory = [];
 		}
 		const h = target.pageAllocationHistory;
-		const nextSeq =
-			h.length === 0 ? 1 : Math.max(...h.map((e) => e.sequence)) + 1;
-		h.push({ sequence: nextSeq, pageNumber: page, location, blockIndices });
+		h.push({
+			sequence: this.nextHistorySequence(h),
+			pageNumber: page,
+			location,
+			blockIndices,
+		});
 		if (target !== process) {
 			process.pageAllocationHistory = h;
 		}
@@ -962,7 +1029,12 @@ export class BlocksState {
 		}
 
 		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
-		this.clearPageAllocationHistoryIfFirstPlacement(proc, blocks, swapBlocks);
+		this.clearPageAllocationHistoryIfFirstPlacement(
+			proc,
+			blocks,
+			swapBlocks,
+			state.useSwap
+		);
 
 		const ramSlotsNeeded = Math.min(
 			BlocksState.PAGING_BLOCKS_PER_PAGE,
@@ -1162,7 +1234,12 @@ export class BlocksState {
 		}
 
 		const proc = this.rebindProcessToCanonical(blocks, swapBlocks, process);
-		this.clearPageAllocationHistoryIfFirstPlacement(proc, blocks, swapBlocks);
+		this.clearPageAllocationHistoryIfFirstPlacement(
+			proc,
+			blocks,
+			swapBlocks,
+			state.useSwap
+		);
 
 		const refreshEmptyRam = () =>
 			blocks
@@ -1184,6 +1261,7 @@ export class BlocksState {
 			if (!vid) {
 				break;
 			}
+			this.appendRemovalNoticesBeforeFullRamEvict(blocks, swapBlocks, vid);
 			this.evictEntireProcessFromRam(
 				blocks,
 				swapBlocks,

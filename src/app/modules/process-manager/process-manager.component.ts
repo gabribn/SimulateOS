@@ -148,7 +148,10 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 		const dialogRef = this.dialog.open(EditProcessDialogComponent, {
 			width: '600px',
 			disableClose: true,
-			data: { process },
+			data: {
+				process,
+				useSwap: this.store.selectSnapshot(BlocksState.getUseSwap),
+			},
 		});
 
 		dialogRef.afterClosed().subscribe((res?: CreateProcessDTO) => {

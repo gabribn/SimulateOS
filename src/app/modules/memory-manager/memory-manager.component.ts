@@ -140,6 +140,7 @@ export class MemoryManagerComponent implements OnInit, OnDestroy {
 				process,
 				blockScaling, // Passa o tipo de escalonamento atual para o diálogo
 				focusPageNumber,
+				useSwap: this.store.selectSnapshot(BlocksState.getUseSwap),
 			},
 		});
 

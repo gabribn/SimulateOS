@@ -70,6 +70,11 @@
         background-color: rgba(198, 40, 40, 0.08);
       }
 
+      &--notice {
+        border-color: #6d4c41;
+        background-color: rgba(109, 76, 65, 0.08);
+      }
+
       &--focus {
         box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.35);
       }
@@ -102,6 +107,12 @@
       border-radius: 12px;
       font-weight: 700;
       font-size: 12px;
+
+      &--notice {
+        border: 2px solid #6d4c41;
+        color: #5d4037;
+        background-color: rgba(255, 255, 255, 0.9);
+      }
     }
 
     &__historico-item--physical &__historico-badge {
@@ -112,5 +123,10 @@
     &__historico-item--swap &__historico-badge {
       border: 2px solid #c62828;
       color: #c62828;
+    }
+
+    &__historico-item--notice &__historico-badge--notice {
+      border: 2px solid #6d4c41;
+      color: #5d4037;
     }
   }  
