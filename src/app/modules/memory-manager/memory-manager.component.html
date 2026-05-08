@@ -87,29 +87,78 @@
 	</div>
 
 	<ng-template #pagingMemoryLayout>
-		<div class="process-memory__paging-columns">
-			<div class="process-memory__memories-column">
-				<div class="memory-title memory-title--in-column">
-					<h2>Memória Física</h2>
-				</div>
-				<div class="process-memory__containerBlocos process-memory__containerBlocos--flat">
-					<div
-						*ngFor="let box of blocks$ | async; let i = index"
-						class="process-memory__blocos"
-						[ngClass]="{ 'empty-box': box.process, 'colored-box': !box.process }"
-						[style.background-color]="box.process?.color"
-						[attr.id]="'box_' + i"
-						(click)="box.process ? editProcess(box.process) : null"
-					>
-						<span class="block-index">{{ i }}</span>
-						<span *ngIf="box.process" class="block-info">
-							{{ box.process.id }}
-						</span>
-					</div>
-				</div>
+		<ng-container *ngIf="useSwap$ | async; else pagingOldLayoutNoSwap">
+			<div class="process-memory__paging-columns process-memory__paging-columns--swap">
+				<aside
+					class="process-memory__table-page process-memory__table-page--right process-memory__table-page--full"
+				>
+					<h2>Tabela de páginas</h2>
+					<div class="process-memory__wrapper-pages">
+						<div class="process-row">
+							<ng-container *ngFor="let process of notFinishedProcesses">
+								<div
+									*ngFor="let pageNumber of getPageNumbers(process)"
+									class="memory-container"
+									[ngClass]="{
+										na: isProcessNotAllocated(process),
+										swap: isProcessShowingSwap(process),
+										fisica:
+											!isProcessShowingSwap(process) &&
+											!isProcessNotAllocated(process)
+									}"
+								>
+									<div
+										class="page-rectangle"
+										[class.page-rectangle--na]="isProcessNotAllocated(process)"
+										[ngStyle]="
+											isProcessNotAllocated(process)
+												? {}
+												: { 'background-color': process.color }
+										"
+										(click)="editProcess(process, pageNumber)"
+									>
+										Processo: <br />{{ process.id }} <br />
+										Página: {{ pageNumber }}
+									</div>
 
-				<ng-container *ngIf="useSwap$ | async">
-					<div class="memory-title memory-title--in-column memory-title--after-ram">
+									<div class="memory-type">
+										{{
+											isProcessNotAllocated(process)
+												? 'N/A'
+												: isProcessShowingSwap(process)
+													? 'SWAP'
+													: 'FÍSICA'
+										}}
+									</div>
+								</div>
+							</ng-container>
+						</div>
+					</div>
+				</aside>
+
+				<section class="process-memory__memory-card process-memory__memory-card--ram">
+					<div class="memory-title memory-title--in-column">
+						<h2>Memória Física</h2>
+					</div>
+					<div class="process-memory__containerBlocos process-memory__containerBlocos--flat">
+						<div
+							*ngFor="let box of blocks$ | async; let i = index"
+							class="process-memory__blocos"
+							[ngClass]="{ 'empty-box': box.process, 'colored-box': !box.process }"
+							[style.background-color]="box.process?.color"
+							[attr.id]="'box_' + i"
+							(click)="box.process ? editProcess(box.process) : null"
+						>
+							<span class="block-index">{{ i }}</span>
+							<span *ngIf="box.process" class="block-info">
+								{{ box.process.id }}
+							</span>
+						</div>
+					</div>
+				</section>
+
+				<section class="process-memory__memory-card process-memory__memory-card--swap">
+					<div class="memory-title memory-title--in-column">
 						<h2>Memória Virtual / Swap</h2>
 					</div>
 					<div
@@ -128,53 +177,78 @@
 							</span>
 						</div>
 					</div>
-				</ng-container>
+				</section>
 			</div>
+		</ng-container>
 
-			<aside class="process-memory__table-page process-memory__table-page--right">
-				<h2>Tabela de páginas</h2>
-				<div class="process-memory__wrapper-pages">
-					<div *ngFor="let process of notFinishedProcesses">
-						<div class="process-row">
-							<div
-								*ngFor="let pageNumber of getPageNumbers(process)"
-								class="memory-container"
-								[ngClass]="{
-									na: isProcessNotAllocated(process),
-									swap: isProcessShowingSwap(process),
-									fisica:
-										!isProcessShowingSwap(process) &&
-										!isProcessNotAllocated(process)
-								}"
-							>
+		<ng-template #pagingOldLayoutNoSwap>
+			<div class="process-memory__paging-columns">
+				<div class="process-memory__memories-column">
+					<div class="memory-title memory-title--in-column">
+						<h2>Memória Física</h2>
+					</div>
+					<div class="process-memory__containerBlocos process-memory__containerBlocos--flat">
+						<div
+							*ngFor="let box of blocks$ | async; let i = index"
+							class="process-memory__blocos"
+							[ngClass]="{ 'empty-box': box.process, 'colored-box': !box.process }"
+							[style.background-color]="box.process?.color"
+							[attr.id]="'box_' + i"
+							(click)="box.process ? editProcess(box.process) : null"
+						>
+							<span class="block-index">{{ i }}</span>
+							<span *ngIf="box.process" class="block-info">
+								{{ box.process.id }}
+							</span>
+						</div>
+					</div>
+				</div>
+
+				<aside class="process-memory__table-page process-memory__table-page--right">
+					<h2>Tabela de páginas</h2>
+					<div class="process-memory__wrapper-pages">
+						<div *ngFor="let process of notFinishedProcesses">
+							<div class="process-row">
 								<div
-									class="page-rectangle"
-									[class.page-rectangle--na]="isProcessNotAllocated(process)"
-									[ngStyle]="
-										isProcessNotAllocated(process)
-											? {}
-											: { 'background-color': process.color }
-									"
-									(click)="editProcess(process, pageNumber)"
+									*ngFor="let pageNumber of getPageNumbers(process)"
+									class="memory-container"
+									[ngClass]="{
+										na: isProcessNotAllocated(process),
+										swap: isProcessShowingSwap(process),
+										fisica:
+											!isProcessShowingSwap(process) &&
+											!isProcessNotAllocated(process)
+									}"
 								>
-									Processo: <br />{{ process.id }} <br />
-									Página: {{ pageNumber }}
-								</div>
+									<div
+										class="page-rectangle"
+										[class.page-rectangle--na]="isProcessNotAllocated(process)"
+										[ngStyle]="
+											isProcessNotAllocated(process)
+												? {}
+												: { 'background-color': process.color }
+										"
+										(click)="editProcess(process, pageNumber)"
+									>
+										Processo: <br />{{ process.id }} <br />
+										Página: {{ pageNumber }}
+									</div>
 
-								<div class="memory-type">
-									{{
-										isProcessNotAllocated(process)
-											? 'N/A'
-											: isProcessShowingSwap(process)
-												? 'SWAP'
-												: 'FÍSICA'
-									}}
+									<div class="memory-type">
+										{{
+											isProcessNotAllocated(process)
+												? 'N/A'
+												: isProcessShowingSwap(process)
+													? 'SWAP'
+													: 'FÍSICA'
+										}}
+									</div>
 								</div>
 							</div>
 						</div>
 					</div>
-				</div>
-			</aside>
-		</div>
+				</aside>
+			</div>
+		</ng-template>
 	</ng-template>
 </div>

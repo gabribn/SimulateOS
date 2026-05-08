@@ -155,13 +155,51 @@ app-header {
 		display: flex;
 		flex-direction: row;
 		align-items: flex-start;
-		gap: 24px;
+		gap: 16px;
 		width: 100%;
 		margin-top: 8px;
 
 		.memory-title--in-column h2 {
 			margin: 0;
 		}
+	}
+
+	&__paging-columns--swap {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		grid-template-rows: auto auto;
+		gap: 16px;
+		align-items: start;
+
+		.process-memory__table-page--full {
+			grid-column: 1 / -1;
+		}
+
+		.process-row {
+			gap: 18px;
+		}
+
+		.process-memory__wrapper-pages {
+			gap: 16px;
+			/* Mantém a caixa “estável” (altura de ~1 card + folga) mesmo vazia */
+			min-height: 200px;
+		}
+
+		.process-memory__containerBlocos--flat {
+			min-height: 232px; /* mantém o card estável mesmo “vazio” */
+			gap: 16px;
+		}
+
+		.process-memory__blocos {
+			margin: 0;
+		}
+	}
+
+	&__memory-card {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
 	}
 
 	&__memories-column {
@@ -193,6 +231,15 @@ app-header {
 	@media (max-width: 960px) {
 		&__paging-columns {
 			flex-direction: column;
+		}
+
+		&__paging-columns--swap {
+			grid-template-columns: 1fr;
+			grid-template-rows: auto auto auto;
+
+			.process-memory__table-page--full {
+				grid-column: 1 / -1;
+			}
 		}
 
 		&__memories-column {
@@ -283,6 +330,14 @@ app-header {
 		width: 40%;
 		max-width: 40%;
 		overflow: hidden;
+
+		&--full {
+			margin-left: 0;
+			margin-top: 0;
+			width: 100%;
+			max-width: none;
+			overflow: visible;
+		}
 
 		&--right {
 			margin-left: 0;
