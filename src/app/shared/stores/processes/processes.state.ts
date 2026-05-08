@@ -3,7 +3,10 @@ import { Action, Selector, State, StateContext, Store } from '@ngxs/store';
 import { tap } from 'rxjs';
 
 import { Color, ProcessColors } from '../../constants/process-colors.constants';
-import { ProcessStates } from '../../constants/process-states.constants';
+import {
+	ProcessStates,
+	type ProcessStatesType,
+} from '../../constants/process-states.constants';
 import { ProcessTypes } from '../../constants/process-types.constants';
 import { ScalingTypesEnum } from '../../constants/scaling-types.constants';
 import { Process } from '../../models/process';
@@ -343,7 +346,10 @@ export class ProcessesState {
 		const index = data.findIndex((item) => item.id === action.process.id);
 		if (index === -1) return;
 
-		const updatedProcess: Process = { ...action.process, state: action.state };
+		const shouldDeferExecution = action.state === ProcessStates.execution;
+		const nextState = shouldDeferExecution ? action.process.state : action.state;
+
+		const updatedProcess: Process = { ...action.process, state: nextState };
 
 		if (
 			updatedProcess.type === ProcessTypes.cpuAndIoBound &&
@@ -356,41 +362,59 @@ export class ProcessesState {
 
 		data[index] = updatedProcess;
 
-		if (action.state === ProcessStates.execution) {
-			context.patchState({ data: [...data] });
+		const finalizeStateUpdate = (finalState: ProcessStatesType) => {
+			const processToPersist: Process = { ...updatedProcess, state: finalState };
+			data[index] = processToPersist;
 
-			const blocksSnap = this.store.selectSnapshot(BlocksState.getBlocks);
-			const swapSnap = this.store.selectSnapshot(BlocksState.getSwapBlocks);
-			const pid = updatedProcess.id;
-			const inRam = blocksSnap.some((b) => b.process?.id === pid);
-			const inSwap = swapSnap.some((b) => b.process?.id === pid);
-
-			if (!inRam && !inSwap) {
+			if (processToPersist.currentType === ProcessTypes.cpuBound) {
 				context.dispatch(
-					new BlocksAction.AllocateBlocks({
-						process: updatedProcess,
-						memoryBlocksRequired: updatedProcess.memoryBlocksRequired,
+					new Logs.CreateLog({
+						process: processToPersist,
+						timer,
 					})
 				);
 			}
-			context.dispatch(new BlocksAction.BringToPhysicalMemory(updatedProcess));
+
+			if (finalState === ProcessStates.finished) {
+				context.dispatch(new BlocksAction.ReleaseBlocks(action.process));
+			}
+
+			context.patchState({ data: [...data] });
+			this.saveStateToLocalStorage(context.getState());
+		};
+
+		if (!shouldDeferExecution) {
+			finalizeStateUpdate(action.state);
+			return;
 		}
 
-		if (action.process.currentType === ProcessTypes.cpuBound) {
-			context.dispatch(
-				new Logs.CreateLog({
+		const pid = updatedProcess.id;
+		const blocksSnap = this.store.selectSnapshot(BlocksState.getBlocks);
+		const swapSnap = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+		const alreadyInRam = blocksSnap.some((b) => b.process?.id === pid);
+		const alreadyInSwap = swapSnap.some((b) => b.process?.id === pid);
+
+		const memoryActions: any[] = [];
+		if (!alreadyInRam && !alreadyInSwap) {
+			memoryActions.push(
+				new BlocksAction.AllocateBlocks({
 					process: updatedProcess,
-					timer,
+					memoryBlocksRequired: updatedProcess.memoryBlocksRequired,
 				})
 			);
 		}
+		memoryActions.push(new BlocksAction.BringToPhysicalMemory(updatedProcess));
 
-		if (action.state === ProcessStates.finished) {
-			context.dispatch(new BlocksAction.ReleaseBlocks(action.process));
-		}
+		return context.dispatch(memoryActions).pipe(
+			tap(() => {
+				const blocksAfter = this.store.selectSnapshot(BlocksState.getBlocks);
+				const nowInRam = blocksAfter.some((b) => b.process?.id === pid);
 
-		context.patchState({ data: [...data] });
-		this.saveStateToLocalStorage(context.getState());
+				finalizeStateUpdate(
+					nowInRam ? ProcessStates.execution : action.process.state
+				);
+			})
+		);
 	}
 
 	@Action(Processes.UpdateProcessPriority)
