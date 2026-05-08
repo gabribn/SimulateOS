@@ -5,7 +5,7 @@ import { BlocksScalingTypesEnum } from './blocks-types.contants';
  * Valor inicial ao carregar o app (antes do localStorage / UI).
  * O modo efetivo fica em `simulateOSBlocks.useSwap` e pode ser alterado no diálogo de criar processo.
  */
-export const DEFAULT_USE_SWAP = true;
+export const DEFAULT_USE_SWAP = false;
 
 export interface MemoryHardwareProfile {
 	ramBlockCount: number;
@@ -18,7 +18,7 @@ export interface MemoryHardwareProfile {
 
 /** Primeiro commit: RAM 120, sem swap, teto 12 páginas. */
 export const MEMORY_HARDWARE_ABUNDANT: MemoryHardwareProfile = {
-	ramBlockCount: 120,
+	ramBlockCount: 125,
 	swapBlockCount: 0,
 	maxPagesPerProcessCap: 5,
 	maxProcessesCap: 15,
