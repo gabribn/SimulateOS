@@ -1449,8 +1449,14 @@ export class BlocksState {
 		context: StateContext<BlocksStateModel>,
 		action: BlocksAction.PickBlockScalingType
 	) {
+		const isContiguous =
+			action.scalingType === BlocksScalingTypesEnum.FirstFit ||
+			action.scalingType === BlocksScalingTypesEnum.BestFit ||
+			action.scalingType === BlocksScalingTypesEnum.WorstFit;
+
 		context.patchState({
 			blockScaling: action.scalingType,
+			useSwap: isContiguous ? false : context.getState().useSwap,
 		});
 
 		context.dispatch(new Processes.StopProcesses());
