@@ -23,6 +23,7 @@ export interface ProcessesStateModel {
 	data: Process[];
 	colors: Color[];
 	timer: number;
+	simulationClock: number;
 	nruLastInterruptSeconds: number;
 	ioWaitTime: number;
 	timeSlice: number;
@@ -34,6 +35,7 @@ export const PROCESSES_STATE_INITIAL_STATE: ProcessesStateModel = {
 	data: [],
 	colors: [],
 	timer: 0,
+	simulationClock: 0,
 	nruLastInterruptSeconds: 0,
 	ioWaitTime: 1,
 	timeSlice: 2,
@@ -520,7 +522,7 @@ export class ProcessesState {
 		context: StateContext<ProcessesStateModel>,
 		action: Processes.UpdateProcessState
 	) {
-		const { data, timer } = context.getState();
+		const { data } = context.getState();
 		const index = data.findIndex((item) => item.id === action.process.id);
 		if (index === -1) return;
 
@@ -545,10 +547,11 @@ export class ProcessesState {
 			data[index] = processToPersist;
 
 			if (processToPersist.currentType === ProcessTypes.cpuBound) {
+				const simulationClock = context.getState().simulationClock ?? 0;
 				context.dispatch(
 					new Logs.CreateLog({
 						process: processToPersist,
-						timer,
+						timer: simulationClock,
 					})
 				);
 			}
@@ -632,6 +635,8 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 		const seconds = highResolutionTime / 1000;
 		const stateBefore = context.getState();
 
+		const simulationClock = (stateBefore.simulationClock ?? 0) + 1;
+
 		let nruLast = stateBefore.nruLastInterruptSeconds ?? 0;
 		if (seconds < nruLast) {
 			nruLast = 0;
@@ -639,7 +644,10 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 
 		const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
 		const useSwap = this.store.selectSnapshot(BlocksState.getUseSwap);
-		const patch: Partial<ProcessesStateModel> = { timer: highResolutionTime };
+		const patch: Partial<ProcessesStateModel> = {
+			timer: highResolutionTime,
+			simulationClock,
+		};
 
 		if (
 			blockScaling === BlocksScalingTypesEnum.NRU &&
@@ -1071,6 +1079,7 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 			ioWaitTime: 1,
 			timeSlice: 2,
 			timer: 0,
+			simulationClock: 0,
 			nruLastInterruptSeconds: 0,
 		});
 
