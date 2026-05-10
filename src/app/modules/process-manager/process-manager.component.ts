@@ -143,8 +143,6 @@ export class ProcessManagerComponent implements OnInit, OnDestroy {
 	editProcess(process: Process) {
 		if (process.state === ProcessStates.finished) return;
 
-		console.log('Process data before opening dialog:', process);  // Log para verificar os dados do processo
-
 		const dialogRef = this.dialog.open(EditProcessDialogComponent, {
 			width: '600px',
 			disableClose: true,

@@ -1,6 +1,7 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { ProcessStates } from 'src/app/shared/constants/process-states.constants';
 import { ScalingTypesEnum } from 'src/app/shared/constants/scaling-types.constants';
 import { BlocksScalingTypesEnum } from 'src/app/shared/constants/blocks-types.contants';
 import { ProcessColors } from 'src/app/shared/constants/process-colors.constants';
@@ -232,8 +233,13 @@ export class EditProcessDialogComponent implements OnInit {
   }
 
   resumeProcess() {
-    this.processForm.patchValue({ state: 'ready' });
-    this.data.process.state = 'ready';
-    localStorage.setItem(`process-${this.data.process.id}`, JSON.stringify(this.processForm.value));
+    const target =
+      this.data.process.resumeTargetState ?? ProcessStates.ready;
+    this.processForm.patchValue({ state: target });
+    this.data.process.state = target;
+    localStorage.setItem(
+      `process-${this.data.process.id}`,
+      JSON.stringify(this.processForm.value)
+    );
   }
 }

@@ -131,8 +131,11 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 
 		const checkedProcessesPIDs = checkedProcesses.map(({ id }) => id);
 
-		const filteredLogs = this.logs.filter(({ process }) =>
-			checkedProcessesPIDs.includes(process.id)
+		const filteredLogs = this.logs.filter(
+			(log) =>
+				log?.process?.id != null &&
+				typeof log.currentTime === 'number' &&
+				checkedProcessesPIDs.includes(log.process.id)
 		);
 
 		const logsByPID = checkedProcessesPIDs.reduce<Array<Array<Log>>>(
@@ -148,11 +151,15 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 
 		const labelsColors = checkedProcesses.map((process) => process.color);
 
+		if (filteredLogs.length === 0) {
+			return;
+		}
+
 		const sortedLogs = [...filteredLogs].sort(
 			(a, b) => a.currentTime - b.currentTime
 		);
 
-		const minTime = sortedLogs[0].currentTime;
+		const minTime = sortedLogs[0]!.currentTime;
 
 		const data: Array<{
 			x: string;

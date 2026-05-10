@@ -33,6 +33,8 @@ export interface Process {
 	pageAllocationHistory?: PageAllocationHistoryEntry[];
 	/** Usado pelo diálogo de edição / localStorage; opcional no modelo. */
 	isAvailable?: boolean;
+	/** Estado da fila (pronto / IO) para retomada após suspensão. */
+	resumeTargetState?: ProcessStatesType;
 }
 
 export interface CreateProcessDTO {
