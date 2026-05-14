@@ -362,7 +362,11 @@ export class BlocksState {
 			);
 
 			if (!moved) {
-				console.error('Falha ao mover: RAM e SWAP cheios.');
+				const freeRam = blocks.filter((b) => !b.process).length;
+				const freeSwap = swapBlocks.filter((b) => !b.process).length;
+				console.error(
+					`Falha ao trazer página do swap para a RAM (molduras livres: RAM=${freeRam}, swap=${freeSwap}). Com RAM cheia é preciso desalojar uma vítima FIFO/LRU/NRU e ter swap livre suficiente para ela.`
+				);
 			}
 		});
 
@@ -937,9 +941,14 @@ export class BlocksState {
 
 		switch (algorithm) {
 			case BlocksScalingTypesEnum.FIFO:
-				const firstInId = allocationOrderIds[0];
-                victimProcess = processesInMemory.find(p => p.id === firstInId);
-                break;
+				for (const id of allocationOrderIds) {
+					const found = processesInMemory.find((p) => p.id === id);
+					if (found) {
+						victimProcess = found;
+						break;
+					}
+				}
+				break;
 
 			case BlocksScalingTypesEnum.LRU:
 				victimProcess = processesInMemory.sort((a, b) => 
@@ -1395,8 +1404,12 @@ export class BlocksState {
 		context: StateContext<BlocksStateModel>,
 		action: BlocksAction.ReleaseBlockById
 	) {
-		const { blocks, swapBlocks } = context.getState();
+		const { blocks, swapBlocks, allocationOrderIds } = context.getState();
 		const idToRelease = action.id;
+
+		const newAllocationOrderIds = (allocationOrderIds || []).filter(
+			(id) => id !== idToRelease
+		);
 
 		// Atualiza os blocos, liberando aquele que tem o ID correspondente
 		const newBlocks = blocks.map((block) => {
@@ -1413,7 +1426,11 @@ export class BlocksState {
 			return block;
 		});
 
-		context.patchState({ blocks: newBlocks, swapBlocks: newSwapBlocks });
+		context.patchState({
+			blocks: newBlocks,
+			swapBlocks: newSwapBlocks,
+			allocationOrderIds: newAllocationOrderIds,
+		});
 		this.saveStateToLocalStorage(context.getState());
 	}
 
@@ -1449,8 +1466,14 @@ export class BlocksState {
 		context: StateContext<BlocksStateModel>,
 		action: BlocksAction.PickBlockScalingType
 	) {
+		const isContiguous =
+			action.scalingType === BlocksScalingTypesEnum.FirstFit ||
+			action.scalingType === BlocksScalingTypesEnum.BestFit ||
+			action.scalingType === BlocksScalingTypesEnum.WorstFit;
+
 		context.patchState({
 			blockScaling: action.scalingType,
+			useSwap: isContiguous ? false : context.getState().useSwap,
 		});
 
 		context.dispatch(new Processes.StopProcesses());

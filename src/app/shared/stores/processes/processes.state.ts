@@ -3,7 +3,10 @@ import { Action, Selector, State, StateContext, Store } from '@ngxs/store';
 import { tap } from 'rxjs';
 
 import { Color, ProcessColors } from '../../constants/process-colors.constants';
-import { ProcessStates } from '../../constants/process-states.constants';
+import {
+	ProcessStates,
+	type ProcessStatesType,
+} from '../../constants/process-states.constants';
 import { ProcessTypes } from '../../constants/process-types.constants';
 import { ScalingTypesEnum } from '../../constants/scaling-types.constants';
 import { Process } from '../../models/process';
@@ -20,6 +23,7 @@ export interface ProcessesStateModel {
 	data: Process[];
 	colors: Color[];
 	timer: number;
+	simulationClock: number;
 	nruLastInterruptSeconds: number;
 	ioWaitTime: number;
 	timeSlice: number;
@@ -31,6 +35,7 @@ export const PROCESSES_STATE_INITIAL_STATE: ProcessesStateModel = {
 	data: [],
 	colors: [],
 	timer: 0,
+	simulationClock: 0,
 	nruLastInterruptSeconds: 0,
 	ioWaitTime: 1,
 	timeSlice: 2,
@@ -283,19 +288,72 @@ export class ProcessesState {
 	) {
 		const state = context.getState();
 		const index = state.data.findIndex((item) => item.id === action.process.id);
+		if (index === -1) return;
 
 		ProcessColors.forEach((item) => {
 			if (item.color === action.process.color) item.isAvailable = true;
 			else if (item.color === action.processDTO.color) item.isAvailable = false;
 		});
 
-		state.data[index] = {
+		const prev = state.data[index];
+		const dto = action.processDTO;
+		const dtoState = dto.state!;
+
+		const shouldResume =
+			prev.state === ProcessStates.suspended &&
+			dtoState !== ProcessStates.suspended &&
+			dtoState !== ProcessStates.finished;
+
+		const shouldSuspend = dtoState === ProcessStates.suspended;
+
+		let newState = dtoState;
+		if (shouldResume) {
+			newState = prev.resumeTargetState ?? ProcessStates.ready;
+		}
+
+		const updated: Process = {
 			...action.process,
-			priority: action.processDTO.priority,
-			type: action.processDTO.type,
-			color: action.processDTO.color,
-			state: action.processDTO.state!,
+			priority: dto.priority,
+			type: dto.type,
+			color: dto.color,
+			state: newState,
 		};
+		if (shouldSuspend) {
+			updated.resumeTargetState =
+				prev.state === ProcessStates.suspended
+					? prev.resumeTargetState ?? ProcessStates.ready
+					: this.resumeTargetStateBeforeSuspend(prev);
+		} else {
+			delete updated.resumeTargetState;
+		}
+
+		if (prev.state === ProcessStates.suspended && dtoState === ProcessStates.suspended) {
+			state.data = this.partitionPlaceSuspendedAtTail(state.data, updated);
+			context.patchState({
+				data: [...state.data],
+				colors: ProcessColors,
+			});
+			this.saveStateToLocalStorage(context.getState());
+			return;
+		}
+
+		if (shouldSuspend || shouldResume) {
+			state.data = this.applySuspendOrResumeReorder(
+				state.data,
+				updated,
+				shouldSuspend,
+				shouldResume,
+				state.scalingType
+			);
+			context.patchState({
+				data: [...state.data],
+				colors: ProcessColors,
+			});
+			this.saveStateToLocalStorage(context.getState());
+			return;
+		}
+
+		state.data[index] = updated;
 
 		if (action.process.priority !== action.processDTO.priority) {
 			const decreasedPriority =
@@ -333,17 +391,145 @@ export class ProcessesState {
 		this.saveStateToLocalStorage(context.getState());
 	}
 
+	private resumeTargetStateBeforeSuspend(prev: Process): ProcessStatesType {
+		if (
+			prev.state === ProcessStates.ioReady ||
+			prev.state === ProcessStates.ioExecution
+		) {
+			return ProcessStates.ioReady;
+		}
+		return ProcessStates.ready;
+	}
+
+	private partitionPlaceSuspendedAtTail(data: Process[], updated: Process): Process[] {
+		const without = data.filter((p) => p.id !== updated.id);
+		const active = without.filter(
+			(p) =>
+				p.state !== ProcessStates.suspended && p.state !== ProcessStates.finished
+		);
+		const suspendedList = without.filter(
+			(p) => p.state === ProcessStates.suspended
+		);
+		const finished = without.filter((p) => p.state === ProcessStates.finished);
+		return [...active, ...suspendedList, updated, ...finished];
+	}
+
+	private insertResumedAtQueueTail(
+		active: Process[],
+		process: Process,
+		scalingType: ScalingTypesEnum
+	): Process[] {
+		if (process.state === ProcessStates.ioReady) {
+			let lastIoReady = -1;
+			for (let i = 0; i < active.length; i++) {
+				if (
+					active[i].state === ProcessStates.ioReady &&
+					active[i].currentType === ProcessTypes.ioBound
+				) {
+					lastIoReady = i;
+				}
+			}
+			const next = [...active];
+			next.splice(lastIoReady >= 0 ? lastIoReady + 1 : next.length, 0, process);
+			return next;
+		}
+
+		if (scalingType === ScalingTypesEnum.CircularWithPriorities) {
+			const p = process.priority;
+			let lastSame = -1;
+			for (let i = 0; i < active.length; i++) {
+				if (active[i].state === ProcessStates.ready && active[i].priority === p) {
+					lastSame = i;
+				}
+			}
+			if (lastSame >= 0) {
+				const next = [...active];
+				next.splice(lastSame + 1, 0, process);
+				return next;
+			}
+			let insertAfterHigher = -1;
+			for (let i = 0; i < active.length; i++) {
+				if (active[i].state === ProcessStates.ready && active[i].priority > p) {
+					insertAfterHigher = i;
+				}
+			}
+			if (insertAfterHigher >= 0) {
+				const next = [...active];
+				next.splice(insertAfterHigher + 1, 0, process);
+				return next;
+			}
+			const firstLower = active.findIndex(
+				(x) => x.state === ProcessStates.ready && x.priority < p
+			);
+			const next = [...active];
+			if (firstLower >= 0) {
+				next.splice(firstLower, 0, process);
+				return next;
+			}
+			next.push(process);
+			return next;
+		}
+
+		let lastReady = -1;
+		for (let i = 0; i < active.length; i++) {
+			if (active[i].state === ProcessStates.ready) {
+				lastReady = i;
+			}
+		}
+		const next = [...active];
+		if (lastReady >= 0) {
+			next.splice(lastReady + 1, 0, process);
+		} else {
+			next.push(process);
+		}
+		return next;
+	}
+
+	private applySuspendOrResumeReorder(
+		data: Process[],
+		updated: Process,
+		shouldSuspend: boolean,
+		shouldResume: boolean,
+		scalingType: ScalingTypesEnum
+	): Process[] {
+		const without = data.filter((p) => p.id !== updated.id);
+		const active = without.filter(
+			(p) =>
+				p.state !== ProcessStates.suspended && p.state !== ProcessStates.finished
+		);
+		const suspendedList = without.filter(
+			(p) => p.state === ProcessStates.suspended
+		);
+		const finished = without.filter((p) => p.state === ProcessStates.finished);
+
+		if (shouldSuspend) {
+			return [...active, ...suspendedList, updated, ...finished];
+		}
+		if (shouldResume) {
+			const newActive = this.insertResumedAtQueueTail(
+				active,
+				updated,
+				scalingType
+			);
+			return [...newActive, ...suspendedList, ...finished];
+		}
+		return data;
+	}
+
 	//
 	@Action(Processes.UpdateProcessState)
 	updateProcessState(
 		context: StateContext<ProcessesStateModel>,
 		action: Processes.UpdateProcessState
 	) {
-		const { data, timer } = context.getState();
+		const { data } = context.getState();
 		const index = data.findIndex((item) => item.id === action.process.id);
 		if (index === -1) return;
 
-		const updatedProcess: Process = { ...action.process, state: action.state };
+		const shouldDeferExecution = action.state === ProcessStates.execution;
+		const nextState = shouldDeferExecution ? action.process.state : action.state;
+
+		const updatedProcess: Process = { ...action.process, state: nextState };
 
 		if (
 			updatedProcess.type === ProcessTypes.cpuAndIoBound &&
@@ -356,41 +542,60 @@ export class ProcessesState {
 
 		data[index] = updatedProcess;
 
-		if (action.state === ProcessStates.execution) {
-			context.patchState({ data: [...data] });
+		const finalizeStateUpdate = (finalState: ProcessStatesType) => {
+			const processToPersist: Process = { ...updatedProcess, state: finalState };
+			data[index] = processToPersist;
 
-			const blocksSnap = this.store.selectSnapshot(BlocksState.getBlocks);
-			const swapSnap = this.store.selectSnapshot(BlocksState.getSwapBlocks);
-			const pid = updatedProcess.id;
-			const inRam = blocksSnap.some((b) => b.process?.id === pid);
-			const inSwap = swapSnap.some((b) => b.process?.id === pid);
-
-			if (!inRam && !inSwap) {
+			if (processToPersist.currentType === ProcessTypes.cpuBound) {
+				const simulationClock = context.getState().simulationClock ?? 0;
 				context.dispatch(
-					new BlocksAction.AllocateBlocks({
-						process: updatedProcess,
-						memoryBlocksRequired: updatedProcess.memoryBlocksRequired,
+					new Logs.CreateLog({
+						process: processToPersist,
+						timer: simulationClock,
 					})
 				);
 			}
-			context.dispatch(new BlocksAction.BringToPhysicalMemory(updatedProcess));
+
+			if (finalState === ProcessStates.finished) {
+				context.dispatch(new BlocksAction.ReleaseBlocks(action.process));
+			}
+
+			context.patchState({ data: [...data] });
+			this.saveStateToLocalStorage(context.getState());
+		};
+
+		if (!shouldDeferExecution) {
+			finalizeStateUpdate(action.state);
+			return;
 		}
 
-		if (action.process.currentType === ProcessTypes.cpuBound) {
-			context.dispatch(
-				new Logs.CreateLog({
+		const pid = updatedProcess.id;
+		const blocksSnap = this.store.selectSnapshot(BlocksState.getBlocks);
+		const swapSnap = this.store.selectSnapshot(BlocksState.getSwapBlocks);
+		const alreadyInRam = blocksSnap.some((b) => b.process?.id === pid);
+		const alreadyInSwap = swapSnap.some((b) => b.process?.id === pid);
+
+		const memoryActions: any[] = [];
+		if (!alreadyInRam && !alreadyInSwap) {
+			memoryActions.push(
+				new BlocksAction.AllocateBlocks({
 					process: updatedProcess,
-					timer,
+					memoryBlocksRequired: updatedProcess.memoryBlocksRequired,
 				})
 			);
 		}
+		memoryActions.push(new BlocksAction.BringToPhysicalMemory(updatedProcess));
 
-		if (action.state === ProcessStates.finished) {
-			context.dispatch(new BlocksAction.ReleaseBlocks(action.process));
-		}
+		return context.dispatch(memoryActions).pipe(
+			tap(() => {
+				const blocksAfter = this.store.selectSnapshot(BlocksState.getBlocks);
+				const nowInRam = blocksAfter.some((b) => b.process?.id === pid);
 
-		context.patchState({ data: [...data] });
-		this.saveStateToLocalStorage(context.getState());
+				finalizeStateUpdate(
+					nowInRam ? ProcessStates.execution : action.process.state
+				);
+			})
+		);
 	}
 
 	@Action(Processes.UpdateProcessPriority)
@@ -430,6 +635,8 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 		const seconds = highResolutionTime / 1000;
 		const stateBefore = context.getState();
 
+		const simulationClock = (stateBefore.simulationClock ?? 0) + 1;
+
 		let nruLast = stateBefore.nruLastInterruptSeconds ?? 0;
 		if (seconds < nruLast) {
 			nruLast = 0;
@@ -437,7 +644,10 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 
 		const blockScaling = this.store.selectSnapshot(BlocksState.getBlockScaling);
 		const useSwap = this.store.selectSnapshot(BlocksState.getUseSwap);
-		const patch: Partial<ProcessesStateModel> = { timer: highResolutionTime };
+		const patch: Partial<ProcessesStateModel> = {
+			timer: highResolutionTime,
+			simulationClock,
+		};
 
 		if (
 			blockScaling === BlocksScalingTypesEnum.NRU &&
@@ -869,6 +1079,7 @@ incrementTimer(context: StateContext<ProcessesStateModel>) {
 			ioWaitTime: 1,
 			timeSlice: 2,
 			timer: 0,
+			simulationClock: 0,
 			nruLastInterruptSeconds: 0,
 		});
 

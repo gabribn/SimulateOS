@@ -12,7 +12,7 @@
   </div>
 
   <div mat-dialog-content>
-    <div class="create-process-dialog__swap-row">
+    <div *ngIf="isPagingMode" class="create-process-dialog__swap-row">
       <mat-slide-toggle
         [checked]="useSwapEnabled"
         (change)="onUseSwapChange($event.checked)"

@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { MatCheckboxChange } from '@angular/material/checkbox';
 import { MatDialogRef } from '@angular/material/dialog';
-import { Select } from '@ngxs/store';
+import { Select, Store } from '@ngxs/store';
 import {
 	ApexAxisChartSeries,
 	ApexChart,
@@ -45,17 +45,15 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 	getFinishedCPUBoundProcesses$!: Observable<Array<Process>>;
 	@Select(ProcessesState.getDisplayedColumns)
 	getDisplayedColumns$!: Observable<string>;
-	@Select(LogsState.getLogs)
-	logs$!: Observable<Array<Log>>;
 	finishedProcesses: Array<CustomProcess> = [];
 	displayedColumns: Array<string> = [];
-	logs: Array<Log> = [];
 	chartOptions: ChartOptions | null = null;
 	isFullscreen = false;
 
 	constructor(
 		@Inject(DOCUMENT) private readonly document: Document,
-		private readonly dialogRef: MatDialogRef<ProcessLifetimeDialogComponent>
+		private readonly dialogRef: MatDialogRef<ProcessLifetimeDialogComponent>,
+		private readonly store: Store
 	) {}
 
 	get isAllProcessesChecked(): boolean {
@@ -64,6 +62,18 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 
 	get checkedProcessesLength(): number {
 		return this.finishedProcesses.filter(({ checked }) => checked).length;
+	}
+
+	private logTime(log: Log): number | null {
+		const t = log?.currentTime as unknown;
+		if (typeof t === 'number' && Number.isFinite(t)) {
+			return t;
+		}
+		if (typeof t === 'string') {
+			const n = Number(t);
+			return Number.isFinite(n) ? n : null;
+		}
+		return null;
 	}
 
 	private getFinishedProcesses(): void {
@@ -82,10 +92,6 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 						checked: false,
 					}));
 				})
-		);
-
-		this.subscription.add(
-			this.logs$.pipe(take(1)).subscribe((logs) => (this.logs = [...logs]))
 		);
 	}
 
@@ -131,13 +137,33 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 
 		const checkedProcessesPIDs = checkedProcesses.map(({ id }) => id);
 
-		const filteredLogs = this.logs.filter(({ process }) =>
-			checkedProcessesPIDs.includes(process.id)
+		const allLogs = this.store.selectSnapshot(LogsState.getLogs) ?? [];
+
+		const filteredLogs = allLogs.filter((log) => {
+			const pid = log?.process?.id;
+			return (
+				pid != null &&
+				checkedProcessesPIDs.includes(pid) &&
+				this.logTime(log) != null
+			);
+		});
+
+		if (filteredLogs.length === 0) {
+			return;
+		}
+
+		const sortedLogs = [...filteredLogs].sort(
+			(a, b) => this.logTime(a)! - this.logTime(b)!
 		);
+
+		const firstT = this.logTime(sortedLogs[0]!);
+		if (firstT == null) {
+			return;
+		}
 
 		const logsByPID = checkedProcessesPIDs.reduce<Array<Array<Log>>>(
 			(result, pid) => {
-				const logsForPID = filteredLogs.filter(
+				const logsForPID = sortedLogs.filter(
 					({ process }) => process.id === pid
 				);
 				result.push(logsForPID);
@@ -148,11 +174,7 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 
 		const labelsColors = checkedProcesses.map((process) => process.color);
 
-		const sortedLogs = [...filteredLogs].sort(
-			(a, b) => a.currentTime - b.currentTime
-		);
-
-		const minTime = sortedLogs[0].currentTime;
+		const minTime = firstT;
 
 		const data: Array<{
 			x: string;
@@ -173,10 +195,15 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 				const logsHalfSize = Math.floor(logs.length / 2);
 
 				for (let i = 0; i < logsHalfSize; i++) {
-					const start = logs[i * 2].currentTime - minTime;
-					const end = logs[i * 2 + 1].currentTime - minTime;
+					const tStart = this.logTime(logs[i * 2]!);
+					const tEnd = this.logTime(logs[i * 2 + 1]!);
+					if (tStart == null || tEnd == null) {
+						continue;
+					}
+					const start = tStart - minTime;
+					const end = tEnd - minTime;
 
-					const process = logs[i * 2].process;
+					const process = logs[i * 2]!.process;
 
 					data.push({
 						x: `PID ${process.id}`,
@@ -204,6 +231,7 @@ export class ProcessLifetimeDialogComponent implements OnInit, OnDestroy {
 					bar: {
 						horizontal: true,
 						barHeight: barHeight + 'px',
+						rangeBarGroupRows: true,
 					},
 				},
 				dataLabels: {
